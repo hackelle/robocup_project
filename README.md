@@ -10,4 +10,11 @@ TU Berlin
 - v. Blanckenburg, Jasper 
 
 ## Project goal:
-Create a sport robot with following abilities:
+
+Detect the direction other robots are looking in:
+
+- Find the eyes (good contrast due to LEDs)
+- Find the head and its dimensions
+- Calculate robot distance based on head height
+- Calculate angle from robot distance and eye distance (should give 1/2 options)
+- Select correct angle based on ears
