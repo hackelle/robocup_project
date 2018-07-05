@@ -29,13 +29,10 @@ class GUI(tkinter.Frame):
         self._tk_img = None
         self._canvas_img = None
 
-        self._x = self._start_x = self._y = self._start_y = None
-
         self._bind_events(root)
 
-        self._lines = None
-        self._active = None
-        self._dragging = False
+        self._lines = []
+        self.reset()
 
         self._coder = coder
 
@@ -46,6 +43,17 @@ class GUI(tkinter.Frame):
         Fine tune the rectangles using the arrow keys.
         TAB changes the active side.
         Press ENTER when done.'''
+
+    def reset(self):
+        self._rects = []
+        self._active_rect = -1
+
+        for rect in self._lines:
+            for line in rect:
+                self.canvas.delete(line)
+        self._lines = []
+        self._active_half = -1
+        self._dragging = False
 
     def load_image(self, path):
         self._img = Image.open(path)
@@ -81,40 +89,61 @@ class GUI(tkinter.Frame):
     def _on_button_press(self, event):
         self._dragging = True
 
-        self._x = self._start_x = self.canvas.canvasx(event.x)
-        self._y = self._start_y = self.canvas.canvasy(event.y)
+        self._rects.append([
+            [self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)],
+            [self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)]
+        ])
 
         self._update_rect()
-        self._set_active(None)
+        self._set_active(half=-1, rect=len(self._rects)-1)
         return 'break'
 
     def _on_motion(self, event):
-        self._x = self.canvas.canvasx(event.x)
-        self._y = self.canvas.canvasy(event.y)
+        self._rects[-1][1] = [self.canvas.canvasx(event.x),
+                              self.canvas.canvasy(event.y)]
 
         self._update_rect()
         return 'break'
 
     def _on_button_release(self, _):
         self._dragging = False
-        self._set_active(0)
+        self._set_active(half=0)
         return 'break'
 
-    def _on_return(self, _):
-        if self._start_x is None:
+    def _on_return(self, ev):
+        if self._dragging:
             return
-        self._coder.done(((self._start_x, self._start_y), (self._x, self._y)))
+
+        self._coder.done(self._rects)
+        self.reset()
+        self._rects = []
+        self._active_rect = -1
+        self._lines = []
+        self._active_half = -1
         return 'break'
 
-    def _on_tab(self, _):
-        if self._active is None:
+    def _on_tab(self, ev):
+        if self._dragging:
             return
 
-        self._set_active((self._active + 1) % 2)
+        # TODO: Why is this Control?
+        if ev.state == 0x0004:
+            if self._active_rect == -1:
+                next_rect = 0
+            else:
+                next_rect = (self._active_rect + 1) % len(self._rects)
+            self._set_active(rect=next_rect)
+        else:
+            if self._active_half == -1:
+                next_half = 0
+            else:
+                next_half = (self._active_half + 1) % 2
+            self._set_active(half=next_half)
+
         return 'break'
 
     def _on_arrow(self, event):
-        if self._lines is None or self._dragging:
+        if len(self._lines) == 0 or self._dragging:
             return
 
         if event.keysym == 'Left':
@@ -130,50 +159,50 @@ class GUI(tkinter.Frame):
         return 'break'
 
     def _update_rect(self):
-        if self._lines is None:
-            self._lines = [
+        ((x1, y1), (x2, y2)) = self._rects[self._active_rect]
+
+        if len(self._lines) < len(self._rects):
+            self._lines.append([
                 self.canvas.create_line(
-                    self._start_x, self._start_y, self._start_x, self._start_y,
-                    fill='red'
+                    x1, y1, x1, y1, fill='red'
                 ) for i in range(4)
-            ]
+            ])
 
-        self.canvas.coords(self._lines[0], self._start_x, self._start_y,
-                           self._start_x, self._y)
-        self.canvas.coords(self._lines[1], self._start_x, self._y,
-                           self._x, self._y)
-        self.canvas.coords(self._lines[2], self._x, self._y,
-                           self._x, self._start_y)
-        self.canvas.coords(self._lines[3], self._x, self._start_y,
-                           self._start_x, self._start_y)
+        lines = self._lines[self._active_rect]
+        self.canvas.coords(lines[0], x1, y1,
+                           x1, y2)
+        self.canvas.coords(lines[1], x1, y2,
+                           x2, y2)
+        self.canvas.coords(lines[2], x2, y2,
+                           x2, y1)
+        self.canvas.coords(lines[3], x2, y1,
+                           x1, y1)
 
-    def _set_active(self, active):
-        if active == self._active:
-            return
+    def _set_active(self, *, half=None, rect=None):
+        if rect is not None:
+            # Recolor old active rect
+            for line in self._lines[self._active_rect]:
+                self.canvas.itemconfig(line, fill='red')
 
-        self._active = active
-        colors = ['red', 'red']
-        if self._active is not None:
-            colors[self._active] = 'blue'
-        for i, line in enumerate(self._lines):
-            self.canvas.itemconfig(line, fill=colors[i // 2])
+            self._active_rect = rect
+            # Force recolor of new active rect
+            if half is None:
+                half = self._active_half
+
+        if half is not None and self._active_rect != -1:
+            self._active_half = half
+            colors = ['red', 'red']
+            if half != -1:
+                colors[self._active_half] = 'blue'
+            for i, line in enumerate(self._lines[self._active_rect]):
+                self.canvas.itemconfig(line, fill=colors[i // 2])
 
     def _move_x(self, dx):
-        if self._active == 0:
-            self._start_x += dx
-        elif self._active == 1:
-            self._x += dx
-        else:
-            return
+        self._rects[self._active_rect][self._active_half][0] += dx
         self._update_rect()
 
     def _move_y(self, dy):
-        if self._active == 0:
-            self._y += dy
-        elif self._active == 1:
-            self._start_y += dy
-        else:
-            return
+        self._rects[self._active_rect][(self._active_half + 1) % 2][1] += dy
         self._update_rect()
 
 
