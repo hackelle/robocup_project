@@ -237,6 +237,7 @@ class Coder:
                 print('Loading image {}'.format(img))
                 self._image = i
                 self._gui.load_image(img)
+                self._root.wm_title('{}/{}'.format(i, len(self._images)))
                 return True
 
         print('Done!')
