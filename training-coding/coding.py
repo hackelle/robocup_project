@@ -252,7 +252,7 @@ class Coder:
         self._data[self._images[self._image]] = rect
 
         with open(self._output, 'w') as fh:
-            json.dump(self._data, fh)
+            json.dump(self._data, fh, indent=2)
 
         self._next_image()
 
