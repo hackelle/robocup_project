@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # To sort by dataset, run
-# ./whatsdone.py pics data.json | awk '{split($2,a,"_"); print a[1]}' | uniq -c
+# ./whatsdone.py pics *.json | grep MISSING | awk '{split($2,a,"_"); print a[1]}' | uniq -c
 
 import json
 import os
@@ -13,8 +13,8 @@ if len(sys.argv) < 3:
 
 pics = map(lambda f: os.path.join(sys.argv[1], f), os.listdir(sys.argv[1]))
 
+pics_done = {}
 for path in sys.argv[2:]:
-    pics_done = {}
     with open(path) as fh:
         new_data = json.load(fh)
         for pic in new_data:
