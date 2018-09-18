@@ -30,7 +30,8 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
 
     def on_vision_updated(self, images):
         self.camera.setPixmap(images['camera'])
-        self.edges.setPixmap(images['temp'])
+        self.edges.setPixmap(images['edges'])
+        self.temp.setPixmap(images['temp'])
 
     def closeEvent(self, _):
         self.vision.stop()

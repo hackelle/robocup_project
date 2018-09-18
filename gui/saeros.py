@@ -36,6 +36,15 @@ class Ui_MainWindow(object):
         self.edges.setObjectName("edges")
         self.gridLayout.addWidget(self.edges, 0, 0, 1, 1)
         self.tabWidget.addTab(self.tab_edges, "")
+        self.tab_temp = QtWidgets.QWidget()
+        self.tab_temp.setObjectName("tab_temp")
+        self.gridLayout_2 = QtWidgets.QGridLayout(self.tab_temp)
+        self.gridLayout_2.setObjectName("gridLayout_2")
+        self.temp = QtWidgets.QLabel(self.tab_temp)
+        self.temp.setText("")
+        self.temp.setObjectName("temp")
+        self.gridLayout_2.addWidget(self.temp, 0, 0, 1, 1)
+        self.tabWidget.addTab(self.tab_temp, "")
         self.horizontalLayout_4.addWidget(self.tabWidget)
         self.tabWidget_2 = QtWidgets.QTabWidget(self.centralwidget)
         self.tabWidget_2.setObjectName("tabWidget_2")
@@ -49,7 +58,7 @@ class Ui_MainWindow(object):
         MainWindow.setCentralWidget(self.centralwidget)
 
         self.retranslateUi(MainWindow)
-        self.tabWidget.setCurrentIndex(1)
+        self.tabWidget.setCurrentIndex(2)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
@@ -57,6 +66,7 @@ class Ui_MainWindow(object):
         MainWindow.setWindowTitle(_translate("MainWindow", "Saeros"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_camera), _translate("MainWindow", "Camera"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_edges), _translate("MainWindow", "Edges"))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_temp), _translate("MainWindow", "Temp"))
         self.tabWidget_2.setTabText(self.tabWidget_2.indexOf(self.tab_5), _translate("MainWindow", "Tab 1"))
         self.tabWidget_2.setTabText(self.tabWidget_2.indexOf(self.tab_6), _translate("MainWindow", "Tab 2"))
 
