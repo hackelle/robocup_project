@@ -3,15 +3,10 @@
 import time
 from abc import ABCMeta, abstractmethod
 
-import gi
-gi.require_version('GdkPixbuf', '2.0')
-from gi.repository import Gdk
-from gi.repository import GdkPixbuf
-from gi.repository import GLib
+from PyQt5 import QtGui, QtCore
 
 from naoqi import ALProxy
 import numpy as np
-import matplotlib.pyplot as plot
 import cv2
 
 
@@ -45,9 +40,11 @@ class StorageVisionProvider(ImageProvider):
         return self.image
 
 
-class Vision(object):
-    def __init__(self, gui, image):
-        self.gui = gui
+class Vision(QtCore.QObject):
+    updated = QtCore.pyqtSignal(object)
+
+    def __init__(self, image):
+        super(Vision, self).__init__()
         self.image = image
 
     def rate_image(self, img):
@@ -59,49 +56,28 @@ class Vision(object):
         # cv2.putText(img, '{:.2f}'.format(measure), (10, 30),
         #             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 3)
 
-    # def get_image(self, camera_id=0):
-        # rgb_img = self.rate_image(rgb_img)
-        # gbytes = GLib.Bytes.new(rgb_img.tostring())
-
-        # return GdkPixbuf.Pixbuf.new_from_bytes(
-        #     gbytes,
-        #     GdkPixbuf.Colorspace.RGB,
-        #     False,
-        #     8,
-        #     640,
-        #     480,
-        #     640 * 3,
-        # )
-
-    def make_pixbuf(self, cv2_img):
-        gbytes = GLib.Bytes.new(cv2_img.tostring())
-
-        return GdkPixbuf.Pixbuf.new_from_bytes(
-            gbytes,
-            GdkPixbuf.Colorspace.RGB,
-            False,
-            8,
-            640,
-            480,
-            640 * 3,
-        )
+    def make_pixmap(self, cv2_img):
+        height, width, _ = cv2_img.shape
+        bytes_per_line = width * 3
+        img = QtGui.QImage(cv2_img.data, width, height, bytes_per_line,
+                           QtGui.QImage.Format_RGB888)
+        return QtGui.QPixmap(img)
 
     def run(self):
         self._running = True
         last_time = 0
         while self._running:
-            # now = time.time()
-            # if now - last_time < 1/30.0:
-            #     time.sleep((last_time + 1/30.0) - now)
-            # last_time = time.time()
-            time.sleep(0.1)
+            now = time.time()
+            if now - last_time < 1/30.0:
+                time.sleep((last_time + 1/30.0) - now)
+            last_time = time.time()
 
             img = self.image.get_image()
             temp = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
             temp[:, :, 0] = cv2.equalizeHist(temp[:, :, 0])
-            temp = self.make_pixbuf(cv2.cvtColor(temp, cv2.COLOR_YUV2BGR))
-            img = self.make_pixbuf(img)
-            self.gui.update_images({'camera': img, 'temp': temp})
+            temp = self.make_pixmap(cv2.cvtColor(temp, cv2.COLOR_YUV2BGR))
+            img = self.make_pixmap(img)
+            self.updated.emit({'camera': img, 'temp': temp})
 
     def stop(self):
         self._running = False
