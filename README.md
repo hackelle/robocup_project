@@ -1,4 +1,4 @@
-# robocup_project
+# Robocup Project: Saeros Head Angle Detection
 
 [SS18] PJ Rob
 Project Robocup
@@ -18,3 +18,6 @@ Detect the direction other robots are looking in:
 - Calculate robot distance based on head height
 - Calculate angle from robot distance and eye distance (should give 1/2 options)
 - Select correct angle based on ears
+
+
+Name inspiration by http://ardapedia.herr-der-ringe-film.de/index.php/Saeros
