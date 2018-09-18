@@ -1,9 +1,10 @@
 #!/usr/bin/env python2
 
+import os
 import sys
 import threading
 
-from PyQt5 import QtWidgets, QtGui
+from PyQt5 import QtWidgets
 
 import vision
 import saeros
@@ -12,6 +13,10 @@ import saeros
 class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
     def __init__(self, parent=None):
         super(GUI, self).__init__(parent)
+        self._project_path = os.path.dirname(
+            os.path.dirname(os.path.realpath(__file__))
+        )
+
         self.setupUi(self)
 
         self.create_vision()
@@ -19,8 +24,14 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
     def create_vision(self):
         self.vision = vision.Vision(
             vision.StorageVisionProvider(
-                '/home/jasper/dev/robocup_project/reference-images'
-                '/full/converted-1m-front-straight.png'
+                os.path.join(
+                    self._project_path,
+                    'reference-images/full/converted-1m-front-left-full.png'
+                )
+            ),
+            os.path.join(
+                self._project_path,
+                'training-coding/models/roboheads-ssd_mobilenet_v1/frozen_inference_graph.pb'
             )
         )
         self.vision.updated.connect(self.on_vision_updated)
