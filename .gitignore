@@ -1,3 +1,5 @@
 /training-coding/pics
 /training-coding/data/*.record
 /training-coding/data/ssd_mobilenet_v1_coco_2018_01_28
+**/*.pyc
+**/*~

@@ -52,13 +52,7 @@ class ObjectDetection(object):
                 od_graph_def.ParseFromString(serialized_graph)
                 tf.import_graph_def(od_graph_def, name='')
 
-    def load_image_into_numpy_array(self, image):
-        (im_width, im_height, _) = image.shape
-        return np.array(image.data).reshape(
-            (im_height, im_width, 3)).astype(np.uint8)
-
     def run_inference_for_single_image(self, image):
-        image = self.load_image_into_numpy_array(image)
         with self.detection_graph.as_default():
             with tf.Session() as sess:
                 # Get handles to input and output tensors
