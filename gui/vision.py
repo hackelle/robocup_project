@@ -2,6 +2,7 @@
 
 import time
 from abc import ABCMeta, abstractmethod
+from math import floor, ceil
 
 from PyQt5 import QtGui, QtCore
 import tensorflow as tf
@@ -10,6 +11,17 @@ from object_detection.utils import ops as utils_ops
 from naoqi import ALProxy
 import numpy as np
 import cv2
+
+
+MIN_SCORE = 0.3
+CLAHE_CLIP_LIMIT = 2.0
+CLAHE_GRID_SIZE = (2, 2)
+CANNY_T1 = 100
+CANNY_T2 = 200
+# Part of a box that has to overlap with another to be considered intersecting
+INTERSECTION_MIN = 0.2
+# Factor we increase the bounding boxes by in each direction
+BB_MULT = 1.25
 
 
 class ImageProvider(object):
@@ -39,7 +51,7 @@ class StorageVisionProvider(ImageProvider):
         self.image = cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
 
     def get_image(self):
-        return self.image
+        return self.image.copy()
 
 
 class ObjectDetection(object):
@@ -100,16 +112,37 @@ class ObjectDetection(object):
 
     def detect(self, image):
         results = self.run_inference_for_single_image(image)
-        m_v = -1
-        m_i = 0
+        boxes = []
         for i, v in enumerate(results['detection_scores']):
-            if v > m_v:
-                m_v = v
-                m_i = i
-        return {
-            'box': results['detection_boxes'][m_i],
-            'score': m_v
-        }
+            if v < MIN_SCORE:
+                break
+            height, width, _ = image.shape
+            box = results['detection_boxes'][i]
+            box = [
+                int(floor(box[1] * width)),
+                int(floor(box[0] * height)),
+                int(ceil(box[3] * width)),
+                int(ceil(box[2] * height)),
+            ]
+
+            if self.intersects(box, map(lambda b: b['box'], boxes)):
+                break
+
+            boxes.append({
+                'box': box,
+                'score': v
+            })
+        return boxes
+
+    def intersects(self, box, others):
+        for other in others:
+            dx = min(other[2], box[2]) - max(other[0], box[0])
+            dy = min(other[3], box[3]) - max(other[2], box[2])
+            if dx >= 0 and dy >= 0:
+                intersection = dx * dy
+                area = (box[2] - box[0]) * (box[3] - box[1])
+                return float(intersection) / area > INTERSECTION_MIN
+        return False
 
 
 class Vision(QtCore.QObject):
@@ -140,7 +173,8 @@ class Vision(QtCore.QObject):
         return QtGui.QPixmap(img)
 
     def postprocess(self, img):
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4, 4))
+        clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT,
+                                tileGridSize=CLAHE_GRID_SIZE)
         processed = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
         processed[:, :, 0] = clahe.apply(processed[:, :, 0])
         bgr = cv2.cvtColor(processed, cv2.COLOR_YUV2BGR)
@@ -152,8 +186,39 @@ class Vision(QtCore.QObject):
         # return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
         img = img.copy()
         for c in range(3):
-            img[:, :, c] = cv2.Canny(img[:, :, c], 100, 200)
+            img[:, :, c] = cv2.Canny(img[:, :, c], CANNY_T1, CANNY_T2)
         return img
+
+    def crop(self, img, box):
+        box = list(map(float, box))
+        dx = (box[2] - box[0]) / 2
+        dy = (box[3] - box[1]) / 2
+        mid_x = box[0] + dx
+        mid_y = box[1] + dy
+        height, width, _ = img.shape
+        new_box = list(map(int, [
+            max(0, mid_x - dx * BB_MULT),
+            max(0, mid_y - dy * BB_MULT),
+            min(width, mid_x + dx * BB_MULT),
+            min(height, mid_y + dy * BB_MULT),
+        ]))
+        return img[new_box[1]:new_box[3], new_box[0]:new_box[2]].copy()
+
+    def detect_heads(self, img):
+        boxes = self.object_detection.detect(img)
+        cropped = []
+        processed = []
+        edges = []
+        for box in boxes:
+            cropped.append(self.crop(img, box['box']))
+            processed.append(self.postprocess(cropped[-1]))
+            edges.append(self.edge_detection(processed[-1]))
+
+        for box in boxes:
+            b = box['box']
+            cv2.rectangle(img, (b[0], b[1]), (b[2], b[3]), (0, 255, 0))
+
+        return processed, edges, map(lambda b: b['score'], boxes)
 
     def run(self):
         self._running = True
@@ -165,16 +230,17 @@ class Vision(QtCore.QObject):
             last_time = time.time()
 
             img = self.image.get_image()
-            print(repr(self.object_detection.detect(img)))
-            temp = self.postprocess(img)
-            edges = self.edge_detection(temp)
+            # temp = self.postprocess(img)
+            # edges = self.edge_detection(temp)
+            temp, edges, scores = self.detect_heads(img)
             img = self.make_pixmap(img)
-            edges = self.make_pixmap(edges)
-            temp = self.make_pixmap(temp)
+            edges = map(self.make_pixmap, edges)
+            temp = map(self.make_pixmap, temp)
             self.updated.emit({
                 'camera': img,
                 'edges': edges,
-                'temp': temp
+                'temp': temp,
+                'scores': scores,
             })
 
     def stop(self):

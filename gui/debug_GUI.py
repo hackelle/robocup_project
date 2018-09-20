@@ -18,20 +18,26 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
         )
 
         self.setupUi(self)
+        self.camera.setScaledContents(True)
+
+        self.temps = []
+        self.edges = []
 
         self.create_vision()
 
     def create_vision(self):
         self.vision = vision.Vision(
-            vision.StorageVisionProvider(
-                os.path.join(
-                    self._project_path,
-                    'reference-images/full/converted-1m-front-left-full.png'
-                )
-            ),
+            vision.RCVisionProvider('10.0.7.15'),
+            # vision.StorageVisionProvider(
+            #     os.path.join(
+            #         self._project_path,
+            #         'training-coding/pics/bernadette_20150617_default_216.png'
+            #     )
+            # ),
             os.path.join(
                 self._project_path,
-                'training-coding/models/roboheads-ssd_mobilenet_v1/frozen_inference_graph.pb'
+                'training-coding/models/roboheads-ssd_mobilenet_v1',
+                'frozen_inference_graph.pb'
             )
         )
         self.vision.updated.connect(self.on_vision_updated)
@@ -41,8 +47,27 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
 
     def on_vision_updated(self, images):
         self.camera.setPixmap(images['camera'])
-        self.edges.setPixmap(images['edges'])
-        self.temp.setPixmap(images['temp'])
+        self.show_images(self.temp_inner, images['temp'], self.temps,
+                         images['scores'])
+        self.show_images(self.edges_inner, images['edges'], self.edges,
+                         images['scores'])
+        # self.edges.setPixmap(images['edges'])
+        # self.temp.setPixmap(images['temp'])
+
+    def show_images(self, tabs, images, labels, scores):
+        tabs.clear()
+        while len(labels) > 0:
+            label = labels.pop()
+            label.close()
+            label.deleteLater()
+
+        for i, img in enumerate(images):
+            label = QtWidgets.QLabel(tabs)
+            label.setPixmap(img)
+            label.setScaledContents(True)
+            tabs.addTab(label, str(scores[i]))
+            label.show()
+            labels.append(label)
 
     def closeEvent(self, _):
         self.vision.stop()
