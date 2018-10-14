@@ -7,6 +7,7 @@ from math import floor, ceil
 from PyQt5 import QtGui, QtCore
 import tensorflow as tf
 from object_detection.utils import ops as utils_ops
+from skimage.measure import ransac, EllipseModel
 
 from naoqi import ALProxy
 import numpy as np
@@ -175,19 +176,27 @@ class Vision(QtCore.QObject):
     def postprocess(self, img):
         clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT,
                                 tileGridSize=CLAHE_GRID_SIZE)
-        processed = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
-        processed[:, :, 0] = clahe.apply(processed[:, :, 0])
-        bgr = cv2.cvtColor(processed, cv2.COLOR_YUV2BGR)
-        return cv2.fastNlMeansDenoisingColored(bgr, None, 10, 10, 7, 21)
+        # processed = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+        # processed[:, :, 0] = clahe.apply(processed[:, :, 0])
+        # bgr = cv2.cvtColor(processed, cv2.COLOR_YUV2BGR)
+        processed = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        processed = clahe.apply(processed)
+        bgr = cv2.cvtColor(processed, cv2.COLOR_GRAY2BGR)
+        # return cv2.blur(bgr, (2, 2))
+        return cv2.medianBlur(bgr, 3)
+        # return cv2.fastNlMeansDenoisingColored(bgr, None, 10, 10, 7, 21)
 
     def edge_detection(self, img):
-        # yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
-        # yuv[:, :, 0] = cv2.Canny(yuv[:, :, 0], 100, 200)
-        # return cv2.cvtColor(yuv, cv2.COLOR_YUV2BGR)
-        img = img.copy()
-        for c in range(3):
-            img[:, :, c] = cv2.Canny(img[:, :, c], CANNY_T1, CANNY_T2)
-        return img
+        yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
+        edges = cv2.Canny(yuv[:, :, 0], 100, 200)
+        return cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+        # gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        # gray = cv2.Canny(gray, 100, 200)
+        # return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+        # img = img.copy()
+        # for c in range(3):
+        #     img[:, :, c] = cv2.Canny(img[:, :, c], CANNY_T1, CANNY_T2)
+        # return img
 
     def crop(self, img, box):
         box = list(map(float, box))
@@ -213,12 +222,21 @@ class Vision(QtCore.QObject):
             cropped.append(self.crop(img, box['box']))
             processed.append(self.postprocess(cropped[-1]))
             edges.append(self.edge_detection(processed[-1]))
+            self.draw_ellipses(processed[-1], edges[-1])
 
         for box in boxes:
             b = box['box']
             cv2.rectangle(img, (b[0], b[1]), (b[2], b[3]), (0, 255, 0))
 
         return processed, edges, map(lambda b: b['score'], boxes)
+
+    def draw_ellipses(self, processed, edges):
+        points = np.array(np.nonzero(edges[:, :, 0])).T
+        model_robust, inliers = ransac(points, EllipseModel, min_samples=3,
+                                       residual_threshold=4, max_trials=50)
+        xc, yc, a, b, theta = map(lambda x: int(round(x)), model_robust.params)
+
+        cv2.ellipse(processed, (xc, yc), (a, b), theta, 0, 360, (255, 0, 0))
 
     def run(self):
         self._running = True
@@ -230,6 +248,7 @@ class Vision(QtCore.QObject):
             last_time = time.time()
 
             img = self.image.get_image()
+            img = self.postprocess(img)
             # temp = self.postprocess(img)
             # edges = self.edge_detection(temp)
             temp, edges, scores = self.detect_heads(img)
