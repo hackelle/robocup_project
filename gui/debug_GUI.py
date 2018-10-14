@@ -27,13 +27,13 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
 
     def create_vision(self):
         self.vision = vision.Vision(
-            vision.RCVisionProvider('10.0.7.15'),
-            # vision.StorageVisionProvider(
-            #     os.path.join(
-            #         self._project_path,
-            #         'training-coding/pics/bernadette_20150617_default_216.png'
-            #     )
-            # ),
+            # vision.RCVisionProvider('10.0.7.15'),
+            vision.StorageVisionProvider(
+                os.path.join(
+                    self._project_path,
+                    'training-coding/pics/priya_20150326_default_225.png'
+                )
+            ),
             os.path.join(
                 self._project_path,
                 'training-coding/models/roboheads-ssd_mobilenet_v1',

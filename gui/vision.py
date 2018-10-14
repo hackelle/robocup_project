@@ -231,12 +231,23 @@ class Vision(QtCore.QObject):
         return processed, edges, map(lambda b: b['score'], boxes)
 
     def draw_ellipses(self, processed, edges):
-        points = np.array(np.nonzero(edges[:, :, 0])).T
-        model_robust, inliers = ransac(points, EllipseModel, min_samples=3,
-                                       residual_threshold=4, max_trials=50)
-        xc, yc, a, b, theta = map(lambda x: int(round(x)), model_robust.params)
+        e = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY)
+        _, contours, _ = cv2.findContours(e, 1, 2)
+        for i, c in enumerate(contours):
+            if len(c) < 10:     # TODO define threshold depending on image size
+                continue
+            ellipse = cv2.fitEllipse(c)
+            A = np.pi * ellipse[1][0] * ellipse[1][1]
+            print A
+            print len(c)
+            cv2.ellipse(processed, ellipse, (0, i*16+15, 0), 1)
 
-        cv2.ellipse(processed, (xc, yc), (a, b), theta, 0, 360, (255, 0, 0))
+        # points = np.array(np.nonzero(edges[:, :, 0])).T
+        # model_robust, inliers = ransac(points, EllipseModel, min_samples=3,
+        #                                residual_threshold=4, max_trials=50)
+        # xc, yc, a, b, theta = map(lambda x: int(round(x)), model_robust.params)
+        #
+        # cv2.ellipse(processed, (xc, yc), (a, b), theta, 0, 360, (255, 0, 0))
 
     def run(self):
         self._running = True
