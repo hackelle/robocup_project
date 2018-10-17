@@ -7,7 +7,7 @@ from math import floor, ceil
 from PyQt5 import QtGui, QtCore
 import tensorflow as tf
 from object_detection.utils import ops as utils_ops
-from skimage.measure import ransac, EllipseModel
+from copy import copy
 
 from naoqi import ALProxy
 import numpy as np
@@ -232,22 +232,116 @@ class Vision(QtCore.QObject):
 
     def draw_ellipses(self, processed, edges):
         e = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY)
+        (rows, cols, _) = processed.shape
+        head_area = rows*cols     # area of the whole head image in pixels
+
+        candidates = []
         _, contours, _ = cv2.findContours(e, 1, 2)
         for i, c in enumerate(contours):
-            if len(c) < 10:     # TODO define threshold depending on image size
+            if len(c) < 5:     # cant find ellipse with less
                 continue
-            ellipse = cv2.fitEllipse(c)
-            A = np.pi * ellipse[1][0] * ellipse[1][1]
-            print A
-            print len(c)
-            cv2.ellipse(processed, ellipse, (0, i*16+15, 0), 1)
 
-        # points = np.array(np.nonzero(edges[:, :, 0])).T
-        # model_robust, inliers = ransac(points, EllipseModel, min_samples=3,
-        #                                residual_threshold=4, max_trials=50)
-        # xc, yc, a, b, theta = map(lambda x: int(round(x)), model_robust.params)
-        #
-        # cv2.ellipse(processed, (xc, yc), (a, b), theta, 0, 360, (255, 0, 0))
+            ellipse = cv2.fitEllipse(c)
+
+            good_ellipse = self.check_ellipse(ellipse, head_area, rows, cols, len(c))
+
+            if good_ellipse:
+                cv2.ellipse(processed, ellipse, (0, i * 255 / len(contours), 0), 1)
+
+                for e in candidates:
+                    if self.check_strong_ellipse_intersection(ellipse, e):
+                        cv2.ellipse(processed, ellipse, (0, 0, i * 255 / len(contours) + 10), 1)
+                        cv2.ellipse(processed, e, (0, 0, i * 255 / len(contours) + 10), 1)
+
+                candidates.append(copy(ellipse))
+
+    def check_ellipse(self, ellipse, head_area, rows, cols, contour_points):
+        """
+        Checks whether this ellipse should be considered for further eye/ear
+        detection or not
+
+        :param ellipse: checked ellipse
+        :param head_area: total area of the head
+        :param rows: number of rows
+        :param cols: number of columns
+        :param contour_points: number of points in the contour
+        :return: whether this ellipse should be considered for further eye/ear
+                detection
+        :rtype: bool
+        """
+
+        area = np.pi * ellipse[1][0] * ellipse[1][1] / 4  # Formula for Ellipse Area for full axes
+        c_center = ellipse[0][0]
+        r_center = ellipse[0][1]
+        minor = ellipse[1][0]
+        major = ellipse[1][1]
+        angle = ellipse[2]
+
+        if area < 1:   # very small
+            return False
+
+        if float(contour_points) / area <= 0.02:  # very unsure
+            return False
+
+        good_ellipse = True
+
+        if 0.2 > area / head_area > 0.03:
+            # big possible ellipse
+
+            if minor / major < 0.6 and (45 < angle < 135):
+                good_ellipse = False
+
+            if r_center > rows * 0.75 or r_center < rows * 0.3:
+                good_ellipse = False
+
+        elif 0.03 >= area / head_area > 0.0025:
+            # small possible ellipse
+
+            if minor / major < 0.3 and (45 < angle < 135):
+                good_ellipse = False
+
+            if r_center > rows * 0.8 or r_center < rows * 0.4:
+                good_ellipse = False
+
+            if c_center > cols * 0.9 or c_center < cols * 0.1:
+                good_ellipse = False
+
+        else:
+            # ellipse has wrong size (very small/big)
+            good_ellipse = False
+        return good_ellipse
+
+    def check_strong_ellipse_intersection(self, ellipse1, ellipse2):
+        """
+        Checks whether there is a strong intersection between these ellipses
+        by checking whether the center point of one is inside the other
+
+        :return: whether there is a strong intersection between these ellipses
+        :rtype: bool
+        """
+
+        return self.check_point_in_ellipse(ellipse1[0][0], ellipse1[0][1], ellipse2[0][0], ellipse2[0][1], ellipse1[1][1], ellipse1[1][0], ellipse1[2]) or \
+                    self.check_point_in_ellipse(ellipse2[0][0], ellipse2[0][1], ellipse1[0][0], ellipse1[0][1], ellipse2[1][1], ellipse2[1][0], ellipse2[2])
+
+    def check_point_in_ellipse(self, c_ell, r_ell, c_p, r_p, major, minor, angle):
+        """
+        Checks whether the point is inside the ellipse or not
+
+        :param c_ell: column of center point of the ellipse
+        :param r_ell: row of center point of the ellipse
+        :param c_p: column of the point
+        :param r_p: row of the point
+        :param major: mayor axis of the ellipse
+        :param minor: minor axis of the ellipse
+        :param angle: angle of the ellipse
+        :return: whether it is inside or not
+        :rtype: bool
+        """
+
+        c_rotated = c_ell + (c_p - c_ell) * np.cos(-angle) - (r_p - r_ell) * np.sin(-angle)
+        r_rotated = r_ell + (c_p - c_ell) * np.sin(-angle) + (r_p - r_ell) * np.cos(-angle)
+
+        return ((c_rotated - c_ell) ** 2) / ((minor / 2) ** 2) + ((r_rotated - r_ell) ** 2) / ((major / 2) ** 2) <= 1
 
     def run(self):
         self._running = True
