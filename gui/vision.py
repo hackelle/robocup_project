@@ -550,7 +550,6 @@ class EllipseDetection(object):
         x, y = ellipse[0]
         a = ellipse[1][0] / 2
         b = ellipse[1][1] / 2
-        # a, b = ellipse[1]
         phi = ellipse[2] * np.pi / 180.0
         outside_angle = 0
         min_dist = ceil(0.05 * max(a, b))
@@ -578,42 +577,8 @@ class EllipseDetection(object):
             )
             p1 = map(lambda i: int(round(i)), p)
             p1 = (p1[0], p1[1])
-            cv2.circle(self.processed, p1, int(min_dist), (0, 255, 255), 1)
             dist = abs(cv2.pointPolygonTest(self.edge_points, p, True))
             if dist > min_dist:
-                # logging.debug("dist=%f, min_dist=%f", dist, min_dist)
                 outside_angle += ANGLE
 
         return outside_angle <= 360 / 8
-
-    def check_strong_ellipse_intersection(self, ellipse1, ellipse2):
-        """
-        Checks whether there is a strong intersection between these ellipses
-        by checking whether the center point of one is inside the other
-
-        :return: whether there is a strong intersection between these ellipses
-        :rtype: bool
-        """
-
-        return self.check_point_in_ellipse(ellipse1[0][0], ellipse1[0][1], ellipse2[0][0], ellipse2[0][1], ellipse1[1][1], ellipse1[1][0], ellipse1[2]) or \
-                    self.check_point_in_ellipse(ellipse2[0][0], ellipse2[0][1], ellipse1[0][0], ellipse1[0][1], ellipse2[1][1], ellipse2[1][0], ellipse2[2])
-
-    def check_point_in_ellipse(self, c_ell, r_ell, c_p, r_p, major, minor, angle):
-        """
-        Checks whether the point is inside the ellipse or not
-
-        :param c_ell: column of center point of the ellipse
-        :param r_ell: row of center point of the ellipse
-        :param c_p: column of the point
-        :param r_p: row of the point
-        :param major: mayor axis of the ellipse
-        :param minor: minor axis of the ellipse
-        :param angle: angle of the ellipse
-        :return: whether it is inside or not
-        :rtype: bool
-        """
-
-        c_rotated = c_ell + (c_p - c_ell) * np.cos(-angle) - (r_p - r_ell) * np.sin(-angle)
-        r_rotated = r_ell + (c_p - c_ell) * np.sin(-angle) + (r_p - r_ell) * np.cos(-angle)
-
-        return ((c_rotated - c_ell) ** 2) / ((minor / 2) ** 2) + ((r_rotated - r_ell) ** 2) / ((major / 2) ** 2) <= 1
