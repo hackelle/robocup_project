@@ -254,6 +254,7 @@ class Vision(QtCore.QObject):
             self.logger.debug("Detecting ellipses in Box #%i...", i)
             ellipse_detection = EllipseDetection(processed[-1], edges[-1])
             ellipse_detection.draw_ellipses()
+            self.logger.debug("Done!")
 
         for box in boxes:
             b = box['box']
@@ -297,6 +298,7 @@ class EllipseDetection(object):
         self.edges = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY)
         (self.rows, self.cols, _) = processed.shape
         self.head_area = self.rows*self.cols
+        self.logger = logging.getLogger()
 
     def draw_ellipses(self):
         candidates = []
@@ -346,7 +348,6 @@ class EllipseDetection(object):
             ellipse = cv2.fitEllipse(c)
             if self.check_ellipse(ellipse, c):
                 good.append(copy(ellipse))
-                return good
 
         return good
 
@@ -370,9 +371,10 @@ class EllipseDetection(object):
                 if distance <= min_distance:
                     candidates.append(ellipse)
 
+            time.sleep(0.01)
             if len(candidates) > 1:
                 max_e = max(candidates, key=self.ellipse_area)
-                i -= len(candidates) - 1
+                i -= 1
                 for e in candidates:
                     if e != max_e:
                         ellipses.remove(e)
@@ -407,23 +409,26 @@ class EllipseDetection(object):
         angle = ellipse[2]
 
         if area < 1:   # very small
+            self.logger.debug("Very small")
             return False
 
         if float(len(contour_points)) / area <= 0.02:  # very unsure
+            self.logger.debug("Very unsure")
             return False
 
         if 0.2 > area / self.head_area > 0.03:
             # big possible ellipse
 
             if minor / major < 0.6 and (45 < angle < 135):
+                self.logger.debug("Big, rotated, elongated")
                 return False
 
             if r_center > self.rows * 0.75 or r_center < self.rows * 0.3:
+                self.logger.debug("Big, not in center")
                 return False
 
         elif 0.03 >= area / self.head_area > 0.0025:
             # small possible ellipse
-            return False
 
             if minor / major < 0.3 and (45 < angle < 135):
                 return False
@@ -438,12 +443,14 @@ class EllipseDetection(object):
             # ellipse has wrong size (very small/big)
             return False
 
-        self.check_partial_ellipse(ellipse, contour_points)
-        return True
+        return self.check_partial_ellipse(ellipse, contour_points)
 
     def check_partial_ellipse(self, ellipse, contour_points):
         """
         Check if a contour fits a large enough part of the fitted ellipse.
+
+        This means that at least 2/3 of the ellipse needs to have points on the
+        contour "near" it.
 
         :param ellipse: The ellipse that was fitted onto `contour_points`
         :param contour_points: The contour
@@ -453,21 +460,32 @@ class EllipseDetection(object):
         a = ellipse[1][0] / 2
         b = ellipse[1][1] / 2
         # a, b = ellipse[1]
-        phi = -(ellipse[2] * np.pi / 180.0)
+        phi = ellipse[2] * np.pi / 180.0
         outside_angle = 0
         min_dist = 0.05 * max(a, b)
         logging.debug("a=%f, b=%f, phi=%f", a, b, phi)
         for angle in range(0, 360, 15):
             rad = angle * np.pi / 180
-            p = (a * np.cos(rad), b * np.sin(rad))
+            # Circle parametrisation
             p = (
-                p[0] * np.cos(phi) - p[1] * np.sin(phi) + x,
-                p[0] * np.sin(phi) - p[1] * np.cos(phi) + y
+                np.cos(rad),
+                np.sin(rad)
             )
-            # p = (
-            #     a * np.cos(rad) * np.cos(phi) - b * np.sin(rad) * np.sin(phi) + x,
-            #     a * np.cos(rad) * np.sin(phi) + b * np.sin(rad) * np.cos(phi) + y
-            # )
+            # Scaling
+            p = (
+                a * p[0],
+                b * p[1]
+            )
+            # Rotation
+            p = (
+                p[0] * np.cos(phi) - p[1] * np.sin(phi),
+                p[0] * np.sin(phi) + p[1] * np.cos(phi)
+            )
+            # Translation
+            p = (
+                p[0] + x,
+                p[1] + y
+            )
             p1 = map(lambda i: int(round(i)), p)
             p1 = (p1[0], p1[1])
             cv2.rectangle(self.processed, p1, p1, (0, 255, 255), 1)
@@ -476,7 +494,7 @@ class EllipseDetection(object):
                 # logging.debug("dist=%f, min_dist=%f", dist, min_dist)
                 outside_angle += 15
 
-        return outside_angle <= 360
+        return outside_angle <= 360 / 3
 
     def check_strong_ellipse_intersection(self, ellipse1, ellipse2):
         """
