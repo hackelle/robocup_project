@@ -21,12 +21,13 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
 
         self.setupUi(self)
         self.logger = logging.getLogger()
-        self.logger.addHandler(GUILogger(self.log_view))
+        self.logger.addHandler(GUILogger())  # self.log_view))
         self.logger.setLevel(logging.DEBUG)
         self.camera.setScaledContents(True)
 
         self.temps = []
         self.edges = []
+        self.edges_old = []
 
         self.create_vision()
         self.create_keybindings()
@@ -46,7 +47,7 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
                 os.path.join(
                     self._project_path,
                     'reference-images',
-                    'full'
+                    'two-robots'
                 )
             ),
             os.path.join(
@@ -82,6 +83,8 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
         self.show_images(self.temp_inner, images['temp'], self.temps,
                          images['scores'])
         self.show_images(self.edges_inner, images['edges'], self.edges,
+                         images['scores'])
+        self.show_images(self.edges_inner_old, images['edges'], self.edges_old,
                          images['scores'])
         # self.edges.setPixmap(images['edges'])
         # self.temp.setPixmap(images['temp'])

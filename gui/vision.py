@@ -505,14 +505,15 @@ class EllipseDetection(object):
         :param contour_points: The contour
         :return Whether the contour fits a large enough part of the ellipse
         """
+        ANGLE = 5
         x, y = ellipse[0]
         a = ellipse[1][0] / 2
         b = ellipse[1][1] / 2
         # a, b = ellipse[1]
         phi = ellipse[2] * np.pi / 180.0
         outside_angle = 0
-        min_dist = 0.05 * max(a, b)
-        for angle in range(0, 360, 15):
+        min_dist = ceil(0.05 * max(a, b))
+        for angle in range(0, 360, ANGLE):
             rad = angle * np.pi / 180
             # Circle parametrisation
             p = (
@@ -536,13 +537,13 @@ class EllipseDetection(object):
             )
             p1 = map(lambda i: int(round(i)), p)
             p1 = (p1[0], p1[1])
-            cv2.rectangle(self.processed, p1, p1, (0, 255, 255), 1)
+            cv2.circle(self.processed, p1, int(min_dist), (0, 255, 255), 1)
             dist = abs(cv2.pointPolygonTest(self.edge_points, p, True))
             if dist > min_dist:
                 # logging.debug("dist=%f, min_dist=%f", dist, min_dist)
-                outside_angle += 15
+                outside_angle += ANGLE
 
-        return outside_angle <= 360 / 3
+        return outside_angle <= 360 / 8
 
     def check_strong_ellipse_intersection(self, ellipse1, ellipse2):
         """

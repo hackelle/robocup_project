@@ -18,7 +18,7 @@
     <item>
      <widget class="QTabWidget" name="tabWidget">
       <property name="currentIndex">
-       <number>0</number>
+       <number>2</number>
       </property>
       <widget class="QWidget" name="tab_camera">
        <attribute name="title">
@@ -44,13 +44,13 @@
         </item>
        </layout>
       </widget>
-      <widget class="QWidget" name="tab_edges">
+      <widget class="QWidget" name="tab_edges_old">
        <attribute name="title">
         <string>Edges</string>
        </attribute>
        <layout class="QGridLayout" name="gridLayout">
         <item row="0" column="0">
-         <widget class="QTabWidget" name="edges_inner"/>
+         <widget class="QTabWidget" name="edges_inner_old"/>
         </item>
        </layout>
       </widget>
@@ -58,24 +58,13 @@
     </item>
     <item>
      <widget class="QTabWidget" name="tabWidget_2">
-      <widget class="QWidget" name="tab_log">
+      <widget class="QWidget" name="tab_edges">
        <attribute name="title">
-        <string>Log</string>
+        <string>Edges</string>
        </attribute>
-       <layout class="QVBoxLayout" name="verticalLayout">
-        <item>
-         <layout class="QGridLayout" name="gridLayout_4">
-          <item row="0" column="0">
-           <widget class="QPlainTextEdit" name="log_view">
-            <property name="undoRedoEnabled">
-             <bool>false</bool>
-            </property>
-            <property name="readOnly">
-             <bool>true</bool>
-            </property>
-           </widget>
-          </item>
-         </layout>
+       <layout class="QGridLayout" name="gridLayout">
+        <item row="0" column="0">
+         <widget class="QTabWidget" name="edges_inner"/>
         </item>
        </layout>
       </widget>
