@@ -347,47 +347,18 @@ class EllipseDetection(object):
         self.logger = logging.getLogger()
 
     def draw_ellipses(self):
-        candidates = []
         _, contours, _ = cv2.findContours(self.edges, 1, 2)
         # Flatten list
         self.edge_points = [point for contour in contours for point in contour]
         self.edge_points = np.array(self.edge_points)
-        # max_area = -1
-        # max_ellipse = None
         ellipses = self.filter_good_ellipses(contours)
         ellipses = self.filter_overlapping(ellipses)
+        eyes, ear = self.facial_structure(ellipses)
 
-        for ellipse in ellipses:
-            # area = self.ellipse_area(ellipse)
-            # if area > max_area:
-            #     max_area = area
-            #     max_ellipse = ellipse
-
-            # cv2.ellipse(processed, ellipse, (0, i * 255 / len(contours), 0), 1)
-            e_class = self.ellipse_classify(ellipse)
-            if e_class == "big":
-                cv2.ellipse(self.processed, ellipse, (0, 255, 0), 1)
-            elif e_class == "small":
-                cv2.ellipse(self.processed, ellipse, (0, 0, 255), 1)
-            else:
-                self.logger.warn("Ellipse class %s!?", e_class)
-                continue
-
-            center = map(round, ellipse[0])
-            center = (int(center[0]), int(center[1]))
-            cv2.rectangle(self.processed, center, center, (255, 255, 0), 1)
-
-            # for e in candidates:
-            #     if self.check_strong_ellipse_intersection(ellipse, e):
-            #         # cv2.ellipse(processed, ellipse, (0, 0, i * 255 / len(contours) + 10), 1)
-            #         # cv2.ellipse(processed, e, (0, 0, i * 255 / len(contours) + 10), 1)
-            #         cv2.ellipse(self.processed, ellipse, (0, 0, 255), 1)
-            #         cv2.ellipse(self.processed, e, (0, 0, 255), 1)
-
-            candidates.append(copy(ellipse))
-
-        # if max_ellipse is not None:
-        #     cv2.ellipse(self.processed, max_ellipse, (255, 0, 0), 1)
+        for eye in eyes:
+            cv2.ellipse(self.processed, eye, (0, 255, 0), 1)
+        if ear is not None:
+            cv2.ellipse(self.processed, ear, (0, 0, 255), 1)
 
     def filter_good_ellipses(self, contours):
         """
@@ -416,7 +387,7 @@ class EllipseDetection(object):
         :return: List of filtered ellipses
         :rtype: list
         """
-        min_distance = 0.05 * sqrt(self.head_area)
+        max_distance = 0.05 * sqrt(self.head_area)
         i = 0
         while i < len(ellipses) - 1:
             center = ellipses[i][0]
@@ -425,7 +396,7 @@ class EllipseDetection(object):
             for ellipse in ellipses[i+1:]:
                 c = ellipse[0]
                 distance = sqrt((center[0] - c[0])**2 + (center[1] - c[1])**2)
-                if distance <= min_distance:
+                if distance <= max_distance:
                     candidates.append(ellipse)
 
             time.sleep(0.01)
@@ -463,6 +434,54 @@ class EllipseDetection(object):
             return "small"
         else:
             return "wrong"
+
+    def facial_structure(self, ellipses):
+        """
+        Splits ellipses into eyes and an ear and filters unreasonable
+        configurations.
+
+        :return: A list of recognized eyes and an ear (or None)
+        :rtype: list, (ellipse or None)
+        """
+        big = filter(lambda e: self.ellipse_classify(e) == "big", ellipses)
+        small = filter(lambda e: self.ellipse_classify(e) == "small", ellipses)
+
+        ear = None
+        if len(big) == 1:
+            ear = big[0]
+
+        if len(small) < 2:
+            # One eye/no eyes
+            return small, ear
+        else:
+            # Check if there are only two eyes on the same height
+            eye_candidates = set()
+            max_dist = 0.1 * sqrt(self.head_area)
+
+            for i, e in enumerate(small):
+                # Find eyes on the same height as e
+                eyes = set([e])
+                center_row = e[0][1]
+                left = None
+                if ear is not None:
+                    left = e[0][0] < ear[0][0]
+
+                for other in small[i+1:]:
+                    # The eyes can't be on opposite sides of the ear
+                    if left is not None:
+                        if (left and other[0][0] > ear[0][0]) or \
+                           (not left and other[0][0] < ear[0][0]):
+                            continue
+
+                    if abs(other[0][1] - center_row) < max_dist:
+                        eyes.add(other)
+                if len(eyes) == 2:
+                    eye_candidates.add(frozenset(eyes))
+
+            if len(eye_candidates) == 1:
+                return list(eye_candidates.pop()), ear
+            else:
+                return [], ear
 
     def check_ellipse(self, ellipse, contour_points):
         """
