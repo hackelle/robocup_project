@@ -1,5 +1,6 @@
 #!/usr/bin/env python2
 
+import logging
 import os
 import sys
 import threading
@@ -8,6 +9,7 @@ from PyQt5 import QtWidgets
 
 import vision
 import saeros
+from logger import GUILogger
 
 
 class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
@@ -18,6 +20,9 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
         )
 
         self.setupUi(self)
+        self.logger = logging.getLogger()
+        self.logger.addHandler(GUILogger(self.log_view))
+        self.logger.setLevel(logging.DEBUG)
         self.camera.setScaledContents(True)
 
         self.temps = []
@@ -27,11 +32,19 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
 
     def create_vision(self):
         self.vision = vision.Vision(
-            # vision.RCVisionProvider('10.0.7.15'),
-            vision.StorageVisionProvider(
+            # vision.RCVisionProvider('10.0.7.14'),
+            # vision.StorageVisionProvider(
+            #     os.path.join(
+            #         self._project_path,
+            #         # 'training-coding/pics/priya_20150326_default_225.png'
+            #         'reference-images/full',
+            #         'converted-two-robots-2.png'
+            #     )
+            # ),
+            vision.DirectoryVisionProvider(
                 os.path.join(
                     self._project_path,
-                    'training-coding/pics/priya_20150326_default_225.png'
+                    'reference-images/two-robots'
                 )
             ),
             os.path.join(

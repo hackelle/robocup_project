@@ -2,7 +2,9 @@
 
 import time
 from abc import ABCMeta, abstractmethod
-from math import floor, ceil
+from math import floor, ceil, sqrt
+import logging
+import os
 
 from PyQt5 import QtGui, QtCore
 import tensorflow as tf
@@ -23,6 +25,7 @@ CANNY_T2 = 200
 INTERSECTION_MIN = 0.2
 # Factor we increase the bounding boxes by in each direction
 BB_MULT = 1.25
+FRAMERATE = 1/5.0
 
 
 class ImageProvider(object):
@@ -55,9 +58,31 @@ class StorageVisionProvider(ImageProvider):
         return self.image.copy()
 
 
+class DirectoryVisionProvider(ImageProvider):
+    def __init__(self, path):
+        self.images = filter(
+            lambda p: os.path.isfile(p),
+            map(
+                lambda p: os.path.join(path, p),
+                os.listdir(path)
+            )
+        )
+        logging.info(repr(self.images))
+        self.images = map(
+            lambda p: cv2.cvtColor(cv2.imread(p), cv2.COLOR_BGR2RGB),
+            self.images
+        )
+        self.index = 0
+
+    def get_image(self):
+        self.index = (self.index + 1) % len(self.images)
+        return self.images[self.index].copy()
+
+
 class ObjectDetection(object):
     def __init__(self, inference_graph):
         self.detection_graph = tf.Graph()
+        self.logger = logging.getLogger()
         with self.detection_graph.as_default():
             od_graph_def = tf.GraphDef()
             with tf.gfile.GFile(inference_graph, 'rb') as fid:
@@ -151,6 +176,7 @@ class Vision(QtCore.QObject):
 
     def __init__(self, image, inference_graph):
         super(Vision, self).__init__()
+        self.logger = logging.getLogger()
         self.image = image
         self.create_object_detection(inference_graph)
 
@@ -214,15 +240,20 @@ class Vision(QtCore.QObject):
         return img[new_box[1]:new_box[3], new_box[0]:new_box[2]].copy()
 
     def detect_heads(self, img):
+        self.logger.debug("Running TF detection...")
         boxes = self.object_detection.detect(img)
         cropped = []
         processed = []
         edges = []
-        for box in boxes:
+        for i, box in enumerate(boxes):
             cropped.append(self.crop(img, box['box']))
+            self.logger.debug("Postprocessing Box #%i...", i)
             processed.append(self.postprocess(cropped[-1]))
+            self.logger.debug("Detecting edges in Box #%i...", i)
             edges.append(self.edge_detection(processed[-1]))
-            self.draw_ellipses(processed[-1], edges[-1])
+            self.logger.debug("Detecting ellipses in Box #%i...", i)
+            ellipse_detection = EllipseDetection(processed[-1], edges[-1])
+            ellipse_detection.draw_ellipses()
 
         for box in boxes:
             b = box['box']
@@ -230,32 +261,130 @@ class Vision(QtCore.QObject):
 
         return processed, edges, map(lambda b: b['score'], boxes)
 
-    def draw_ellipses(self, processed, edges):
-        e = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY)
-        (rows, cols, _) = processed.shape
-        head_area = rows*cols     # area of the whole head image in pixels
+    def run(self):
+        self._running = True
+        last_time = 0
+        while self._running:
+            now = time.time()
+            if now - last_time < 1/FRAMERATE:
+                time.sleep((last_time + 1/FRAMERATE) - now)
+            last_time = time.time()
 
+            self.logger.debug("Getting image...")
+            img = self.image.get_image()
+            self.logger.debug("Postprocessing...")
+            img = self.postprocess(img)
+            # temp = self.postprocess(img)
+            # edges = self.edge_detection(temp)
+            temp, edges, scores = self.detect_heads(img)
+            img = self.make_pixmap(img)
+            edges = map(self.make_pixmap, edges)
+            temp = map(self.make_pixmap, temp)
+            self.updated.emit({
+                'camera': img,
+                'edges': edges,
+                'temp': temp,
+                'scores': scores,
+            })
+
+    def stop(self):
+        self._running = False
+
+
+class EllipseDetection(object):
+    def __init__(self, processed, edges):
+        self.processed = processed
+        self.edges = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY)
+        (self.rows, self.cols, _) = processed.shape
+        self.head_area = self.rows*self.cols
+
+    def draw_ellipses(self):
         candidates = []
-        _, contours, _ = cv2.findContours(e, 1, 2)
-        for i, c in enumerate(contours):
+        _, contours, _ = cv2.findContours(self.edges, 1, 2)
+        max_area = -1
+        max_ellipse = None
+        ellipses = self.filter_good_ellipses(contours)
+        ellipses = self.filter_overlapping(ellipses)
+
+        for ellipse in ellipses:
+            area = self.ellipse_area(ellipse)
+            if area > max_area:
+                max_area = area
+                max_ellipse = ellipse
+
+            # cv2.ellipse(processed, ellipse, (0, i * 255 / len(contours), 0), 1)
+            cv2.ellipse(self.processed, ellipse, (0, 255, 0), 1)
+            center = map(round, ellipse[0])
+            center = (int(center[0]), int(center[1]))
+            cv2.rectangle(self.processed, center, center, (255, 255, 0), 1)
+
+            for e in candidates:
+                if self.check_strong_ellipse_intersection(ellipse, e):
+                    # cv2.ellipse(processed, ellipse, (0, 0, i * 255 / len(contours) + 10), 1)
+                    # cv2.ellipse(processed, e, (0, 0, i * 255 / len(contours) + 10), 1)
+                    cv2.ellipse(self.processed, ellipse, (0, 0, 255), 1)
+                    cv2.ellipse(self.processed, e, (0, 0, 255), 1)
+
+            candidates.append(copy(ellipse))
+
+        if max_ellipse is not None:
+            cv2.ellipse(self.processed, max_ellipse, (255, 0, 0), 1)
+
+    def filter_good_ellipses(self, contours):
+        """
+        Filter out all bad ellipses and return the good ones.
+
+        :param contours: The contours in the image
+        :return: List of good ellipses
+        :rtype: list
+        """
+        good = []
+
+        for c in contours:
             if len(c) < 5:     # cant find ellipse with less
                 continue
-
             ellipse = cv2.fitEllipse(c)
+            if self.check_ellipse(ellipse, c):
+                good.append(copy(ellipse))
+                return good
 
-            good_ellipse = self.check_ellipse(ellipse, head_area, rows, cols, len(c))
+        return good
 
-            if good_ellipse:
-                cv2.ellipse(processed, ellipse, (0, i * 255 / len(contours), 0), 1)
+    def filter_overlapping(self, ellipses):
+        """
+        Filter ellipses that overlap and return the larger ones.
 
+        :param ellipses: The ellipses
+        :return: List of filtered ellipses
+        :rtype: list
+        """
+        min_distance = 0.05 * sqrt(self.head_area)
+        i = 0
+        while i < len(ellipses) - 1:
+            center = ellipses[i][0]
+            candidates = [ellipses[i]]
+
+            for ellipse in ellipses[i+1:]:
+                c = ellipse[0]
+                distance = sqrt((center[0] - c[0])**2 + (center[1] - c[1])**2)
+                if distance <= min_distance:
+                    candidates.append(ellipse)
+
+            if len(candidates) > 1:
+                max_e = max(candidates, key=self.ellipse_area)
+                i -= len(candidates) - 1
                 for e in candidates:
-                    if self.check_strong_ellipse_intersection(ellipse, e):
-                        cv2.ellipse(processed, ellipse, (0, 0, i * 255 / len(contours) + 10), 1)
-                        cv2.ellipse(processed, e, (0, 0, i * 255 / len(contours) + 10), 1)
+                    if e != max_e:
+                        ellipses.remove(e)
 
-                candidates.append(copy(ellipse))
+            i += 1
 
-    def check_ellipse(self, ellipse, head_area, rows, cols, contour_points):
+        return ellipses
+
+    def ellipse_area(self, ellipse):
+        return np.pi * ellipse[1][0] * ellipse[1][1] / 4
+
+    def check_ellipse(self, ellipse, contour_points):
         """
         Checks whether this ellipse should be considered for further eye/ear
         detection or not
@@ -264,7 +393,7 @@ class Vision(QtCore.QObject):
         :param head_area: total area of the head
         :param rows: number of rows
         :param cols: number of columns
-        :param contour_points: number of points in the contour
+        :param contour_points: points in the contour
         :return: whether this ellipse should be considered for further eye/ear
                 detection
         :rtype: bool
@@ -280,36 +409,74 @@ class Vision(QtCore.QObject):
         if area < 1:   # very small
             return False
 
-        if float(contour_points) / area <= 0.02:  # very unsure
+        if float(len(contour_points)) / area <= 0.02:  # very unsure
             return False
 
-        good_ellipse = True
-
-        if 0.2 > area / head_area > 0.03:
+        if 0.2 > area / self.head_area > 0.03:
             # big possible ellipse
 
             if minor / major < 0.6 and (45 < angle < 135):
-                good_ellipse = False
+                return False
 
-            if r_center > rows * 0.75 or r_center < rows * 0.3:
-                good_ellipse = False
+            if r_center > self.rows * 0.75 or r_center < self.rows * 0.3:
+                return False
 
-        elif 0.03 >= area / head_area > 0.0025:
+        elif 0.03 >= area / self.head_area > 0.0025:
             # small possible ellipse
+            return False
 
             if minor / major < 0.3 and (45 < angle < 135):
-                good_ellipse = False
+                return False
 
-            if r_center > rows * 0.8 or r_center < rows * 0.4:
-                good_ellipse = False
+            if r_center > self.rows * 0.8 or r_center < self.rows * 0.4:
+                return False
 
-            if c_center > cols * 0.9 or c_center < cols * 0.1:
-                good_ellipse = False
+            if c_center > self.cols * 0.9 or c_center < self.cols * 0.1:
+                return False
 
         else:
             # ellipse has wrong size (very small/big)
-            good_ellipse = False
-        return good_ellipse
+            return False
+
+        self.check_partial_ellipse(ellipse, contour_points)
+        return True
+
+    def check_partial_ellipse(self, ellipse, contour_points):
+        """
+        Check if a contour fits a large enough part of the fitted ellipse.
+
+        :param ellipse: The ellipse that was fitted onto `contour_points`
+        :param contour_points: The contour
+        :return Whether the contour fits a large enough part of the ellipse
+        """
+        x, y = ellipse[0]
+        a = ellipse[1][0] / 2
+        b = ellipse[1][1] / 2
+        # a, b = ellipse[1]
+        phi = -(ellipse[2] * np.pi / 180.0)
+        outside_angle = 0
+        min_dist = 0.05 * max(a, b)
+        logging.debug("a=%f, b=%f, phi=%f", a, b, phi)
+        for angle in range(0, 360, 15):
+            rad = angle * np.pi / 180
+            p = (a * np.cos(rad), b * np.sin(rad))
+            p = (
+                p[0] * np.cos(phi) - p[1] * np.sin(phi) + x,
+                p[0] * np.sin(phi) - p[1] * np.cos(phi) + y
+            )
+            # p = (
+            #     a * np.cos(rad) * np.cos(phi) - b * np.sin(rad) * np.sin(phi) + x,
+            #     a * np.cos(rad) * np.sin(phi) + b * np.sin(rad) * np.cos(phi) + y
+            # )
+            p1 = map(lambda i: int(round(i)), p)
+            p1 = (p1[0], p1[1])
+            cv2.rectangle(self.processed, p1, p1, (0, 255, 255), 1)
+            dist = abs(cv2.pointPolygonTest(contour_points, p, True))
+            if dist > min_dist:
+                # logging.debug("dist=%f, min_dist=%f", dist, min_dist)
+                outside_angle += 15
+
+        return outside_angle <= 360
 
     def check_strong_ellipse_intersection(self, ellipse1, ellipse2):
         """
@@ -342,30 +509,3 @@ class Vision(QtCore.QObject):
         r_rotated = r_ell + (c_p - c_ell) * np.sin(-angle) + (r_p - r_ell) * np.cos(-angle)
 
         return ((c_rotated - c_ell) ** 2) / ((minor / 2) ** 2) + ((r_rotated - r_ell) ** 2) / ((major / 2) ** 2) <= 1
-
-    def run(self):
-        self._running = True
-        last_time = 0
-        while self._running:
-            now = time.time()
-            if now - last_time < 1/30.0:
-                time.sleep((last_time + 1/30.0) - now)
-            last_time = time.time()
-
-            img = self.image.get_image()
-            img = self.postprocess(img)
-            # temp = self.postprocess(img)
-            # edges = self.edge_detection(temp)
-            temp, edges, scores = self.detect_heads(img)
-            img = self.make_pixmap(img)
-            edges = map(self.make_pixmap, edges)
-            temp = map(self.make_pixmap, temp)
-            self.updated.emit({
-                'camera': img,
-                'edges': edges,
-                'temp': temp,
-                'scores': scores,
-            })
-
-    def stop(self):
-        self._running = False
