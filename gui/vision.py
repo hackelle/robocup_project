@@ -5,6 +5,7 @@ from abc import ABCMeta, abstractmethod
 from math import floor, ceil, sqrt
 import logging
 import os
+from threading import Lock, Condition
 
 from PyQt5 import QtGui, QtCore
 import tensorflow as tf
@@ -33,6 +34,12 @@ class ImageProvider(object):
 
     @abstractmethod
     def get_image(self):
+        pass
+
+    def next(self):
+        pass
+
+    def prev(self):
         pass
 
 
@@ -77,6 +84,12 @@ class DirectoryVisionProvider(ImageProvider):
     def get_image(self):
         self.index = (self.index + 1) % len(self.images)
         return self.images[self.index].copy()
+
+    def next(self):
+        self.index = (self.index + 1) % len(self.images)
+
+    def prev(self):
+        self.index = (self.index - 1) % len(self.images)
 
 
 class ObjectDetection(object):
@@ -179,6 +192,10 @@ class Vision(QtCore.QObject):
         self.logger = logging.getLogger()
         self.image = image
         self.create_object_detection(inference_graph)
+        self.condition = Condition()
+        self.lock = Lock()
+        self.paused = False
+        self.display_next = False
 
     def create_object_detection(self, inference_graph):
         self.object_detection = ObjectDetection(inference_graph)
@@ -270,9 +287,16 @@ class Vision(QtCore.QObject):
             if now - last_time < 1/FRAMERATE:
                 time.sleep((last_time + 1/FRAMERATE) - now)
             last_time = time.time()
+            with self.condition:
+                while self.paused:
+                    if self.display_next:
+                        self.display_next = False
+                        break
+                    self.condition.wait()
 
             self.logger.debug("Getting image...")
-            img = self.image.get_image()
+            with self.lock:
+                img = self.image.get_image()
             self.logger.debug("Postprocessing...")
             img = self.postprocess(img)
             # temp = self.postprocess(img)
@@ -287,6 +311,28 @@ class Vision(QtCore.QObject):
                 'temp': temp,
                 'scores': scores,
             })
+
+    def pause(self):
+        self.logger.info("Play/Pause")
+        with self.condition:
+            self.paused = not self.paused
+            self.condition.notify_all()
+
+    def prev(self):
+        self.logger.info("Prev")
+        with self.lock:
+            self.image.prev()
+            with self.condition:
+                self.display_next = True
+                self.condition.notify_all()
+
+    def next(self):
+        self.logger.info("Next")
+        with self.lock:
+            self.image.next()
+            with self.condition:
+                self.display_next = True
+                self.condition.notify_all()
 
     def stop(self):
         self._running = False

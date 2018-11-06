@@ -5,7 +5,7 @@ import os
 import sys
 import threading
 
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets, QtGui, QtCore
 
 import vision
 import saeros
@@ -29,6 +29,7 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
         self.edges = []
 
         self.create_vision()
+        self.create_keybindings()
 
     def create_vision(self):
         self.vision = vision.Vision(
@@ -58,6 +59,23 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
 
         self.vision_thread = threading.Thread(target=self.vision.run)
         self.vision_thread.start()
+
+    def create_keybindings(self):
+        self._pause_shortcut = QtWidgets.QShortcut(
+            QtGui.QKeySequence(QtCore.Qt.Key_Space),
+            self
+        )
+        self._pause_shortcut.activated.connect(self.vision.pause)
+        self._next_shortcut = QtWidgets.QShortcut(
+            QtGui.QKeySequence(QtCore.Qt.Key_Right),
+            self
+        )
+        self._next_shortcut.activated.connect(self.vision.next)
+        self._prev_shortcut = QtWidgets.QShortcut(
+            QtGui.QKeySequence(QtCore.Qt.Key_Left),
+            self
+        )
+        self._prev_shortcut.activated.connect(self.vision.prev)
 
     def on_vision_updated(self, images):
         self.camera.setPixmap(images['camera'])
