@@ -86,6 +86,7 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
                          images['scores'])
         self.show_images(self.edges_inner_old, images['edges'], self.edges_old,
                          images['scores'])
+        self.drawing.setPixmap(images['drawing'])
         # self.edges.setPixmap(images['edges'])
         # self.temp.setPixmap(images['temp'])
 

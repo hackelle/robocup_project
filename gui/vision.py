@@ -2,7 +2,7 @@
 
 import time
 from abc import ABCMeta, abstractmethod
-from math import floor, ceil, sqrt
+from math import floor, ceil, sqrt, sin, cos, pi
 import logging
 import os
 from threading import Lock, Condition
@@ -262,6 +262,7 @@ class Vision(QtCore.QObject):
         cropped = []
         processed = []
         edges = []
+        faces = []
         for i, box in enumerate(boxes):
             cropped.append(self.crop(img, box['box']))
             self.logger.debug("Postprocessing Box #%i...", i)
@@ -270,14 +271,19 @@ class Vision(QtCore.QObject):
             edges.append(self.edge_detection(processed[-1]))
             self.logger.debug("Detecting ellipses in Box #%i...", i)
             ellipse_detection = EllipseDetection(processed[-1], edges[-1])
-            ellipse_detection.draw_ellipses()
+            faces.append(ellipse_detection.detect_ellipses())
+            ellipse_detection.draw_ellipses(*faces[-1])
             self.logger.debug("Done!")
+        self.logger.debug("Creating Geometry...")
+        geometry_creation = GeometryCreation(faces)
+        geometry = geometry_creation.create()
+        geometry_img = geometry_creation.draw(geometry)
 
         for box in boxes:
             b = box['box']
             cv2.rectangle(img, (b[0], b[1]), (b[2], b[3]), (0, 255, 0))
 
-        return processed, edges, map(lambda b: b['score'], boxes)
+        return processed, edges, map(lambda b: b['score'], boxes), geometry_img
 
     def run(self):
         self._running = True
@@ -301,7 +307,8 @@ class Vision(QtCore.QObject):
             img = self.postprocess(img)
             # temp = self.postprocess(img)
             # edges = self.edge_detection(temp)
-            temp, edges, scores = self.detect_heads(img)
+            temp, edges, scores, geometry_img = self.detect_heads(img)
+            geometry_img = self.make_pixmap(img)
             img = self.make_pixmap(img)
             edges = map(self.make_pixmap, edges)
             temp = map(self.make_pixmap, temp)
@@ -309,6 +316,7 @@ class Vision(QtCore.QObject):
                 'camera': img,
                 'edges': edges,
                 'temp': temp,
+                'drawing': geometry_img,
                 'scores': scores,
             })
 
@@ -346,15 +354,16 @@ class EllipseDetection(object):
         self.head_area = self.rows*self.cols
         self.logger = logging.getLogger()
 
-    def draw_ellipses(self):
+    def detect_ellipses(self):
         _, contours, _ = cv2.findContours(self.edges, 1, 2)
         # Flatten list
         self.edge_points = [point for contour in contours for point in contour]
         self.edge_points = np.array(self.edge_points)
         ellipses = self.filter_good_ellipses(contours)
         ellipses = self.filter_overlapping(ellipses)
-        eyes, ear = self.facial_structure(ellipses)
+        return self.facial_structure(ellipses)
 
+    def draw_ellipses(self, eyes, ear):
         for eye in eyes:
             cv2.ellipse(self.processed, eye, (0, 255, 0), 1)
         if ear is not None:
@@ -582,3 +591,37 @@ class EllipseDetection(object):
                 outside_angle += ANGLE
 
         return outside_angle <= 360 / 8
+
+
+NAO_EAR_HEIGHT = 62.1  # mm
+NAO_IMG_HEIGHT = 480  # px
+NAO_SENSOR_HEIGHT = 968 * 1.9E-3  # mm
+NAO_VFOV = 47.64 / 180 * pi
+NAO_FOCAL_LENGTH = ((NAO_SENSOR_HEIGHT / 2) / sin(NAO_VFOV/2)
+                    * sin(pi/2 - NAO_VFOV/2))
+
+class GeometryCreation(object):
+    def __init__(self, faces):
+        self.faces = faces
+        self.robots = []
+        self.logger = logging.getLogger()
+
+    def create(self):
+        for i, face in enumerate(self.faces):
+            eyes, ear = face
+            if ear is None:
+                self.logger.warn("Face %i has no ear, aborting!", i)
+                continue
+
+            height = ear[1][1]
+            dist = (
+                (NAO_FOCAL_LENGTH * NAO_EAR_HEIGHT * NAO_IMG_HEIGHT) /
+                (height * NAO_SENSOR_HEIGHT)
+            )
+            self.logger.debug("f = {}".format(NAO_FOCAL_LENGTH))
+            self.logger.debug("d = {}".format(dist))
+            # TODO: Calculate distance from pinhole camera projection
+            # http://doc.aldebaran.com/2-1/family/robots/video_robot.html
+
+    def draw(self, geometry):
+        pass
