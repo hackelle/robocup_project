@@ -352,34 +352,42 @@ class EllipseDetection(object):
         # Flatten list
         self.edge_points = [point for contour in contours for point in contour]
         self.edge_points = np.array(self.edge_points)
-        max_area = -1
-        max_ellipse = None
+        # max_area = -1
+        # max_ellipse = None
         ellipses = self.filter_good_ellipses(contours)
         ellipses = self.filter_overlapping(ellipses)
 
         for ellipse in ellipses:
-            area = self.ellipse_area(ellipse)
-            if area > max_area:
-                max_area = area
-                max_ellipse = ellipse
+            # area = self.ellipse_area(ellipse)
+            # if area > max_area:
+            #     max_area = area
+            #     max_ellipse = ellipse
 
             # cv2.ellipse(processed, ellipse, (0, i * 255 / len(contours), 0), 1)
-            cv2.ellipse(self.processed, ellipse, (0, 255, 0), 1)
+            e_class = self.ellipse_classify(ellipse)
+            if e_class == "big":
+                cv2.ellipse(self.processed, ellipse, (0, 255, 0), 1)
+            elif e_class == "small":
+                cv2.ellipse(self.processed, ellipse, (0, 0, 255), 1)
+            else:
+                self.logger.warn("Ellipse class %s!?", e_class)
+                continue
+
             center = map(round, ellipse[0])
             center = (int(center[0]), int(center[1]))
             cv2.rectangle(self.processed, center, center, (255, 255, 0), 1)
 
-            for e in candidates:
-                if self.check_strong_ellipse_intersection(ellipse, e):
-                    # cv2.ellipse(processed, ellipse, (0, 0, i * 255 / len(contours) + 10), 1)
-                    # cv2.ellipse(processed, e, (0, 0, i * 255 / len(contours) + 10), 1)
-                    cv2.ellipse(self.processed, ellipse, (0, 0, 255), 1)
-                    cv2.ellipse(self.processed, e, (0, 0, 255), 1)
+            # for e in candidates:
+            #     if self.check_strong_ellipse_intersection(ellipse, e):
+            #         # cv2.ellipse(processed, ellipse, (0, 0, i * 255 / len(contours) + 10), 1)
+            #         # cv2.ellipse(processed, e, (0, 0, i * 255 / len(contours) + 10), 1)
+            #         cv2.ellipse(self.processed, ellipse, (0, 0, 255), 1)
+            #         cv2.ellipse(self.processed, e, (0, 0, 255), 1)
 
             candidates.append(copy(ellipse))
 
-        if max_ellipse is not None:
-            cv2.ellipse(self.processed, max_ellipse, (255, 0, 0), 1)
+        # if max_ellipse is not None:
+        #     cv2.ellipse(self.processed, max_ellipse, (255, 0, 0), 1)
 
     def filter_good_ellipses(self, contours):
         """
@@ -435,61 +443,75 @@ class EllipseDetection(object):
     def ellipse_area(self, ellipse):
         return np.pi * ellipse[1][0] * ellipse[1][1] / 4
 
+    def ellipse_classify(self, ellipse, n_points=None):
+        """
+        Classify an ellipse by its size
+
+        :param ellipse: Ellipse to classify
+        :param n_points: Number of points in the contour for the ellipse. If
+                         this is None, we won't check against ellipses that we
+                         can't be sure about
+        """
+        area = self.ellipse_area(ellipse)
+        if area < 1:
+            return "very small"
+        elif n_points is not None and n_points / area <= 0.02:
+            return "unsure"
+        elif 0.2 > area / self.head_area > 0.03:
+            return "big"
+        elif 0.03 >= area / self.head_area > 0.0025:
+            return "small"
+        else:
+            return "wrong"
+
     def check_ellipse(self, ellipse, contour_points):
         """
         Checks whether this ellipse should be considered for further eye/ear
         detection or not
 
         :param ellipse: checked ellipse
-        :param head_area: total area of the head
-        :param rows: number of rows
-        :param cols: number of columns
         :param contour_points: points in the contour
         :return: whether this ellipse should be considered for further eye/ear
                 detection
         :rtype: bool
         """
 
-        area = np.pi * ellipse[1][0] * ellipse[1][1] / 4  # Formula for Ellipse Area for full axes
+        e_class = self.ellipse_classify(ellipse, len(contour_points))
         c_center = ellipse[0][0]
         r_center = ellipse[0][1]
         minor = ellipse[1][0]
         major = ellipse[1][1]
         angle = ellipse[2]
 
-        if area < 1:   # very small
-            self.logger.debug("Very small")
+        # We're only interested in eyes or ears, so we filter out all ellipses
+        # that can't be either
+        if e_class == "very small":
             return False
-
-        if float(len(contour_points)) / area <= 0.02:  # very unsure
-            self.logger.debug("Very unsure")
+        elif e_class == "unsure":
             return False
-
-        if 0.2 > area / self.head_area > 0.03:
-            # big possible ellipse
-
+        elif e_class == "big":
+            # Big ellipses could be ears
             if minor / major < 0.6 and (45 < angle < 135):
-                self.logger.debug("Big, rotated, elongated")
+                # Rotated and very elongated
                 return False
 
             if r_center > self.rows * 0.75 or r_center < self.rows * 0.3:
-                self.logger.debug("Big, not in center")
+                # Too high/low on the head
                 return False
-
-        elif 0.03 >= area / self.head_area > 0.0025:
-            # small possible ellipse
-
+        elif e_class == "small":
+            # Small ellipses could be eyes
             if minor / major < 0.3 and (45 < angle < 135):
+                # Rotate and very elongated
                 return False
 
             if r_center > self.rows * 0.8 or r_center < self.rows * 0.4:
+                # Too high/low on the head
                 return False
 
             if c_center > self.cols * 0.9 or c_center < self.cols * 0.1:
+                # Too far right/left on the head
                 return False
-
         else:
-            # ellipse has wrong size (very small/big)
             return False
 
         return self.check_partial_ellipse(ellipse, contour_points)
