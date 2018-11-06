@@ -44,7 +44,8 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
             vision.DirectoryVisionProvider(
                 os.path.join(
                     self._project_path,
-                    'reference-images/two-robots'
+                    'reference-images',
+                    'full'
                 )
             ),
             os.path.join(

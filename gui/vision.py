@@ -303,6 +303,9 @@ class EllipseDetection(object):
     def draw_ellipses(self):
         candidates = []
         _, contours, _ = cv2.findContours(self.edges, 1, 2)
+        # Flatten list
+        self.edge_points = [point for contour in contours for point in contour]
+        self.edge_points = np.array(self.edge_points)
         max_area = -1
         max_ellipse = None
         ellipses = self.filter_good_ellipses(contours)
@@ -463,7 +466,6 @@ class EllipseDetection(object):
         phi = ellipse[2] * np.pi / 180.0
         outside_angle = 0
         min_dist = 0.05 * max(a, b)
-        logging.debug("a=%f, b=%f, phi=%f", a, b, phi)
         for angle in range(0, 360, 15):
             rad = angle * np.pi / 180
             # Circle parametrisation
@@ -489,7 +491,7 @@ class EllipseDetection(object):
             p1 = map(lambda i: int(round(i)), p)
             p1 = (p1[0], p1[1])
             cv2.rectangle(self.processed, p1, p1, (0, 255, 255), 1)
-            dist = abs(cv2.pointPolygonTest(contour_points, p, True))
+            dist = abs(cv2.pointPolygonTest(self.edge_points, p, True))
             if dist > min_dist:
                 # logging.debug("dist=%f, min_dist=%f", dist, min_dist)
                 outside_angle += 15
