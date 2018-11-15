@@ -423,6 +423,12 @@ class EllipseDetection(object):
     def ellipse_area(self, ellipse):
         return np.pi * ellipse[1][0] * ellipse[1][1] / 4
 
+    def ellipse_y_coords(self, ellipse):
+        y_dim = ellipse[1][1] * cos(ellipse[2] / 180 * pi)
+
+        return (ellipse[0][1] - y_dim / 2,
+                ellipse[0][1] + y_dim / 2)
+
     def ellipse_classify(self, ellipse, n_points=None):
         """
         Classify an ellipse by its size
@@ -458,6 +464,19 @@ class EllipseDetection(object):
         ear = None
         if len(big) == 1:
             ear = big[0]
+
+        new_small = []
+        if ear is not None:
+            ear_y = self.ellipse_y_coords(ear)
+            for e in small:
+                # Check that the eye isn't above or below the ear
+                self.logger.info("Eye is at %f, ear at [%f, %f]", e[0][1],
+                                 ear_y[0], ear_y[1])
+                if ear_y[0] < e[0][1] < ear_y[1]:
+                    new_small.append(e)
+                else:
+                    self.logger.warn("Eye above/below ear")
+        small = new_small
 
         if len(small) < 2:
             # One eye/no eyes
