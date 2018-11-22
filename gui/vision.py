@@ -580,7 +580,7 @@ class EllipseDetection(object):
         b = ellipse[1][1] / 2
         phi = ellipse[2] * np.pi / 180.0
         outside_angle = 0
-        min_dist = ceil(0.05 * max(a, b))
+        min_dist = max(1.125, ceil(0.05 * max(a, b)))
         for angle in range(0, 360, ANGLE):
             rad = angle * np.pi / 180
             # Circle parametrisation
