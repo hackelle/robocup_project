@@ -97,6 +97,7 @@ class DirectoryVisionProvider(ImageProvider):
 
 
 class ObjectDetection(object):
+    # TODO: Retrain NN for preprocessed images
     def __init__(self, inference_graph):
         self.detection_graph = tf.Graph()
         self.logger = logging.getLogger()
@@ -208,10 +209,6 @@ class Vision(QtCore.QObject):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         edges = cv2.Canny(gray, 100, 300)
         return cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
-        # measure = cv2.Laplacian(gray, cv2.CV_64F).var()
-
-        # cv2.putText(img, '{:.2f}'.format(measure), (10, 30),
-        #             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 3)
 
     def make_pixmap(self, cv2_img):
         height, width, _ = cv2_img.shape
@@ -223,27 +220,15 @@ class Vision(QtCore.QObject):
     def postprocess(self, img):
         clahe = cv2.createCLAHE(clipLimit=CLAHE_CLIP_LIMIT,
                                 tileGridSize=CLAHE_GRID_SIZE)
-        # processed = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
-        # processed[:, :, 0] = clahe.apply(processed[:, :, 0])
-        # bgr = cv2.cvtColor(processed, cv2.COLOR_YUV2BGR)
         processed = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         processed = clahe.apply(processed)
         bgr = cv2.cvtColor(processed, cv2.COLOR_GRAY2BGR)
-        # return cv2.blur(bgr, (2, 2))
         return cv2.medianBlur(bgr, 3)
-        # return cv2.fastNlMeansDenoisingColored(bgr, None, 10, 10, 7, 21)
 
     def edge_detection(self, img):
         yuv = cv2.cvtColor(img, cv2.COLOR_BGR2YUV)
         edges = cv2.Canny(yuv[:, :, 0], 100, 200)
         return cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
-        # gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        # gray = cv2.Canny(gray, 100, 200)
-        # return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-        # img = img.copy()
-        # for c in range(3):
-        #     img[:, :, c] = cv2.Canny(img[:, :, c], CANNY_T1, CANNY_T2)
-        # return img
 
     def crop(self, img, box):
         box = list(map(float, box))
@@ -283,6 +268,9 @@ class Vision(QtCore.QObject):
         geometry_creation = GeometryCreation(faces, img.shape[:2])
         geometry = geometry_creation.create()
         geometry_img = geometry_creation.draw(geometry)
+        # TODO: Calculate the most likely angle, esp. if there are multiple
+        # robots
+        # TODO: Some kind of action (e.g. turn that direction)
 
         for box in boxes:
             b = box['box']
@@ -310,8 +298,6 @@ class Vision(QtCore.QObject):
                 img = self.image.get_image()
             self.logger.debug("Postprocessing...")
             img = self.postprocess(img)
-            # temp = self.postprocess(img)
-            # edges = self.edge_detection(temp)
             temp, edges, scores, geometry_img = self.detect_heads(img)
             geometry_img = self.make_pixmap(geometry_img)
             img = self.make_pixmap(img)
@@ -658,7 +644,6 @@ class GeometryCreation(object):
             facing_angle, sure = self.calculate_facing_angle(face)
             self.logger.debug("local facing angle = {}".format(facing_angle))
             facing_angle = radial_angle - facing_angle
-            # facing_angle = np.pi / 2 - facing_angle
 
             geometry.append((location, facing_angle))
 
@@ -691,6 +676,7 @@ class GeometryCreation(object):
         if ear_location == 'right':
             angle = -angle
         sure = ear_location != 'unsure'
+        # TODO: Do something when we're unsure
 
         return angle, sure
 

@@ -3,3 +3,9 @@
 /training-coding/data/ssd_mobilenet_v1_coco_2018_01_28
 **/*.pyc
 **/*~
+**/.auctex-auto
+**/*.log
+**/_region_*
+**/*.aux
+**/*.fdb_latexmk
+**/*.fls
