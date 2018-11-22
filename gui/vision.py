@@ -271,8 +271,9 @@ class Vision(QtCore.QObject):
             edges.append(self.edge_detection(processed[-1]))
             self.logger.debug("Detecting ellipses in Box #%i...", i)
             ellipse_detection = EllipseDetection(processed[-1], edges[-1])
-            faces.append(ellipse_detection.detect_ellipses())
-            ellipse_detection.draw_ellipses(*faces[-1])
+            face = ellipse_detection.detect_ellipses()
+            faces.append(face)
+            ellipse_detection.draw_ellipses(*face[0])
             self.logger.debug("Done!")
         self.logger.debug("Creating Geometry...")
         geometry_creation = GeometryCreation(faces)
@@ -361,7 +362,7 @@ class EllipseDetection(object):
         self.edge_points = np.array(self.edge_points)
         ellipses = self.filter_good_ellipses(contours)
         ellipses = self.filter_overlapping(ellipses)
-        return self.facial_structure(ellipses)
+        return self.facial_structure(ellipses), (self.rows, self.cols)
 
     def draw_ellipses(self, eyes, ear):
         for eye in eyes:
@@ -628,7 +629,7 @@ class GeometryCreation(object):
 
     def create(self):
         for i, face in enumerate(self.faces):
-            eyes, ear = face
+            eyes, ear = face[0]
             if ear is None:
                 self.logger.warn("Face %i has no ear, aborting!", i)
                 continue
@@ -638,8 +639,42 @@ class GeometryCreation(object):
                 (NAO_FOCAL_LENGTH * NAO_EAR_HEIGHT * NAO_IMG_HEIGHT) /
                 (height * NAO_SENSOR_HEIGHT)
             )
-            angle = np.arccos(ear[1][0] / ear[1][1])
-            self.logger.debug("d = {}, angle = {}".format(dist, angle))
+
+            # Calculate angle (between [0, 180] deg)
+            angle, sure = self.calculate_angle(face)
+
+            self.logger.debug("d = {}, angle = {}, sure = {}".format(
+                dist, angle, sure))
+
+    def calculate_angle(self, face):
+        (eyes, ear), (rows, cols) = face
+
+        # This will return the angle from the (local!) x axis...
+        angle = np.arccos(ear[1][0] / ear[1][1])
+        self.logger.debug("angle before correction: {}".format(angle))
+        # ... so subtract it from 90 deg
+        angle = np.pi / 2 - angle
+
+        if len(eyes) == 0:
+            # The robot is looking away from us, so add 180
+            angle += np.pi
+
+        ear_location = self.ear_location(ear, rows)
+        if ear_location == 'right':
+            angle = -angle
+        sure = ear_location != 'unsure'
+
+        return angle, sure
+
+    def ear_location(self, ear, rows):
+        ear_x = ear[0][0]
+
+        if ear_x < 2 * rows / 5.0:
+            return 'left'
+        elif ear_x > 4 * rows / 5.0:
+            return 'right'
+        else:
+            return 'middle'
 
     def draw(self, geometry):
         pass
