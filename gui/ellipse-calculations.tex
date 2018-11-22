@@ -1,0 +1,30 @@
+\documentclass[english]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{babel}
+\usepackage{amsmath}
+
+\begin{document}
+\section{Angle calculation}
+We calculate the angle by assuming that the ellipse (ear) we found was a circle
+in the xy-plane that was rotated about the y axis and then projected into the
+xy-plane again. The projection should theoretically be a proper camera
+projection but for simplification purposes we assume a parallel projection.
+
+We can discard the translation and rotation of our ellipse. Our ellipse is the
+projection of a circle that was rotated about the y axis into the XY-plane.
+
+We should be able to calculate the rotation angle from just four points at the
+ends of the major and minor axes respectively.
+
+A rotation about the y axis only changes the x coordinate (and z, but we cannot
+determine the z coordinates from the image):
+
+\begin{align*}
+  x &= \cos{\theta} \cdot a \sin{\alpha} \\
+  x_{1} = b &= \cos{\theta} \cdot a \sin{\frac{\pi}{2}} \\
+  b &= \cos{\theta} \cdot a \\
+  x_{2} = -b &= \cos{\theta} \cdot a \sin{\frac{3 \pi}{2}} = \cos{\theta} \cdot (-a) \\
+  \theta &= \arccos{\frac{b}{a}}
+\end{align*}
+
+\end{document}

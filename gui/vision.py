@@ -619,6 +619,7 @@ NAO_VFOV = 47.64 / 180 * pi
 NAO_FOCAL_LENGTH = ((NAO_SENSOR_HEIGHT / 2) / sin(NAO_VFOV/2)
                     * sin(pi/2 - NAO_VFOV/2))
 
+
 class GeometryCreation(object):
     def __init__(self, faces):
         self.faces = faces
@@ -637,10 +638,8 @@ class GeometryCreation(object):
                 (NAO_FOCAL_LENGTH * NAO_EAR_HEIGHT * NAO_IMG_HEIGHT) /
                 (height * NAO_SENSOR_HEIGHT)
             )
-            self.logger.debug("f = {}".format(NAO_FOCAL_LENGTH))
-            self.logger.debug("d = {}".format(dist))
-            # TODO: Calculate distance from pinhole camera projection
-            # http://doc.aldebaran.com/2-1/family/robots/video_robot.html
+            angle = np.arccos(ear[1][0] / ear[1][1])
+            self.logger.debug("d = {}, angle = {}".format(dist, angle))
 
     def draw(self, geometry):
         pass
