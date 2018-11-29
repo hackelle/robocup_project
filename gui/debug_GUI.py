@@ -7,6 +7,7 @@ import threading
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 
+import image_provider
 import vision
 import saeros
 from logger import GUILogger
@@ -31,11 +32,18 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
 
         self.create_vision()
         self.create_keybindings()
+        # actual vision
+        self.vision = None
+        self.vision_thread = None
+        # for keybindings
+        self._pause_shortcut = None
+        self._next_shortcut = None
+        self._prev_shortcut = None
 
     def create_vision(self):
         self.vision = vision.Vision(
-            # vision.RCVisionProvider('10.0.7.14'),
-            # vision.StorageVisionProvider(
+            # image_provider.RCVisionProvider('10.0.7.14'),
+            # image_provider.StorageVisionProvider(
             #     os.path.join(
             #         self._project_path,
             #         # 'training-coding/pics/priya_20150326_default_225.png'
@@ -43,7 +51,7 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
             #         'converted-two-robots-2.png'
             #     )
             # ),
-            vision.DirectoryVisionProvider(
+            image_provider.DirectoryVisionProvider(
                 os.path.join(
                     self._project_path,
                     'reference-images',

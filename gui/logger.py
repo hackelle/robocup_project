@@ -3,6 +3,7 @@
 import logging
 from threading import Lock
 
+
 class GUILogger(logging.Handler):
     widget = None
     mutex = Lock()
