@@ -129,8 +129,8 @@ class EllipseDetection(object):
         if len(big) == 1:
             ear = big[0]
 
-        new_small = []
         if ear is not None:
+            new_small = []
             ear_y = self.ellipse_y_coords(ear)
             for e in small:
                 # Check that the eye isn't above or below the ear
@@ -140,7 +140,7 @@ class EllipseDetection(object):
                     new_small.append(e)
                 else:
                     self.logger.warn("Eye above/below ear")
-        small = new_small
+            small = new_small
 
         if len(small) < 2:
             # One eye/no eyes
