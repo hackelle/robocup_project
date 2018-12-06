@@ -1,5 +1,6 @@
 import logging
 import time
+import random
 from copy import copy
 from math import sqrt, cos, pi, ceil
 
@@ -21,11 +22,91 @@ class EllipseDetection(object):
     def detect_ellipses(self):
         _, contours, _ = cv2.findContours(self.edges, 1, 2)
         # Flatten list
-        self.edge_points = [point for contour in contours for point in contour]
+        self.edge_points = [point[0] for contour in contours for point in contour]
         self.edge_points = np.array(self.edge_points)
-        ellipses = self.filter_good_ellipses(contours)
+        # ellipses = self.filter_good_ellipses(contours)
+        ellipses = self.ransac_ellipses()
         ellipses = self.filter_overlapping(ellipses)
         return self.facial_structure(ellipses)
+
+    def ransac_ellipses(self):
+        RANSAC_K = 500
+        RANSAC_N = 5
+        RANSAC_T = 0.05
+        RANSAC_D = 10
+
+        best_err = float('inf')
+        best_fit = None
+        best_inliers = None
+        for _ in range(RANSAC_K):
+            maybe_inliers = random.sample(self.edge_points, RANSAC_N)
+            maybe_model = cv2.fitEllipse(np.array(maybe_inliers))
+            also_inliers = []
+            for point in self.edge_points:
+                if self.point_in_list(point, maybe_inliers):
+                    continue
+                if self.point_around_ellipse(point, maybe_model, RANSAC_T):
+                    also_inliers.append(point)
+            inliers = maybe_inliers + also_inliers
+            if len(inliers) < RANSAC_D:
+                continue
+            better_model = cv2.fitEllipse(np.array(inliers))
+            this_err = self.model_err(better_model, inliers)
+            if this_err < best_err:
+                self.logger.debug("err went %f -> %f", best_err, this_err)
+                best_err = this_err
+                best_fit = better_model
+                best_inliers = inliers
+        cv2.ellipse(self.processed, best_fit, (255, 0, 0), 1)
+        for point in best_inliers:
+            self.logger.debug("point: %s", repr(point))
+            cv2.circle(self.processed, tuple(point), 1, (255, 0, 255), 1)
+        return [best_fit]
+
+    def point_in_list(self, point, l):
+        for p in l:
+            if np.array_equal(p, point):
+                return True
+        return False
+
+    def point_around_ellipse(self, point, ellipse, mult):
+        """
+        Check if a point is around an ellipse.
+
+        :param point: The point
+        :param ellipse: The ellipse
+        :param mult: The multiplier difference which defines the threshold.
+                     E.g. if mult=0.2, then we check if the point is outside
+                     of an ellipse with a*=0.8, b*=0.8 and within an ellipse
+                     with a*=1.2, b*=1.2
+        """
+        inner = list(ellipse)
+        outer = list(ellipse)
+        return (not self.point_in_ellipse(point, inner) and
+                self.point_in_ellipse(point, outer))
+
+    def point_in_ellipse(self, point, ellipse):
+        # https://math.stackexchange.com/a/76463/101072
+        point = self.rotate_point(point, -ellipse[2])
+        x, y = point
+        c_x, c_y = ellipse[0]
+        a = ellipse[1][0] / 2
+        b = ellipse[1][1] / 2
+        return ((x - c_x) ** 2 / a ** 2 + (y - c_y) ** 2 / b ** 2) <= 1
+
+    def rotate_point(self, point, degrees):
+        rad = degrees / 180 * np.pi
+        c = np.cos(rad)
+        s = np.sin(rad)
+        x = point[0]
+        y = point[1]
+        return (
+            c * x - s * y,
+            s * x + c * y
+        )
+
+    def model_err(self, model, inliers):
+        return self.ellipse_area(model) / len(inliers)
 
     def draw_ellipses(self, eyes, ear):
         for eye in eyes:
