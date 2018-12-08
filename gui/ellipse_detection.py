@@ -3,6 +3,7 @@ import time
 import random
 from copy import copy
 from math import sqrt, cos, pi, ceil
+import skimage.measure
 
 import cv2
 import numpy as np
@@ -25,9 +26,46 @@ class EllipseDetection(object):
         self.edge_points = [point[0] for contour in contours for point in contour]
         self.edge_points = np.array(self.edge_points)
         # ellipses = self.filter_good_ellipses(contours)
-        ellipses = self.ransac_ellipses()
+        # ellipses = self.ransac_ellipses()
+        ellipses = self.scikit_ellipses()
         ellipses = self.filter_overlapping(ellipses)
         return self.facial_structure(ellipses)
+
+    def scikit_ellipses(self):
+        self.logger.debug("RANSAC'ing")
+        RANSAC_K = 2000
+        RANSAC_D = 10
+        RANSAC_T = 1.5
+
+        best_err = float('inf')
+        models = []
+        for _ in range(RANSAC_K):
+            model, inliers = skimage.measure.ransac(
+                self.edge_points, skimage.measure.EllipseModel, RANSAC_D,
+                RANSAC_T, max_trials=1
+            )
+            ellipse = (
+                model.params[:2],
+                [model.params[2] * 2, model.params[3] * 2],
+                model.params[4] * 180 / np.pi
+            )
+            this_err = self.model_err(ellipse, sum(inliers))
+            if this_err < best_err:
+                best_err = this_err
+                models.append((ellipse, inliers))
+
+        for ellipse, inliers in models:
+            self.logger.debug("Found model with %d inliers: %s", sum(inliers),
+                              repr(ellipse))
+            for i, inlier in enumerate(inliers):
+                if not inlier:
+                    continue
+                x, y = self.edge_points[i]
+                self.processed[y, x] = (255, 255, 0)
+            cv2.ellipse(
+                self.processed, ellipse, (255, 0, 255), 1
+            )
+        return map(lambda m: m[0], models)
 
     def ransac_ellipses(self):
         RANSAC_K = 500
@@ -105,8 +143,8 @@ class EllipseDetection(object):
             s * x + c * y
         )
 
-    def model_err(self, model, inliers):
-        return self.ellipse_area(model) / len(inliers)
+    def model_err(self, model, n_inliers):
+        return self.ellipse_area(model) / n_inliers
 
     def draw_ellipses(self, eyes, ear):
         for eye in eyes:
