@@ -8,7 +8,7 @@ import skimage.measure
 import cv2
 import numpy as np
 
-ANGLE_INCREMENT = 5
+ANGLE_INCREMENT = 1
 
 
 class EllipseDetection(object):
@@ -25,81 +25,26 @@ class EllipseDetection(object):
         # Flatten list
         self.edge_points = [point[0] for contour in contours for point in contour]
         self.edge_points = np.array(self.edge_points)
-        # ellipses = self.filter_good_ellipses(contours)
-        # ellipses = self.ransac_ellipses()
-        ellipses = self.scikit_ellipses()
+        self.logger.debug("Pre-merge: %d contours", len(contours))
+        contours = self.merge_contours(contours)
+        self.logger.debug("Post-merge: %d contours", len(contours))
+        ellipses = self.filter_good_ellipses(contours)
+        self.logger.debug("First filter: %d ellipses", len(ellipses))
+        for ellipse in ellipses:
+            cv2.ellipse(self.processed, ellipse, (255, 255, 0), 1)
         ellipses = self.filter_overlapping(ellipses)
+        for ellipse in ellipses:
+            cv2.ellipse(self.processed, ellipse, (0, 255, 255), 1)
+        self.logger.debug("Second filter: %d ellipses", len(ellipses))
         return self.facial_structure(ellipses)
 
-    def scikit_ellipses(self):
-        self.logger.debug("RANSAC'ing")
-        RANSAC_K = 2000
-        RANSAC_D = 10
-        RANSAC_T = 1.5
-
-        best_err = float('inf')
-        models = []
-        for _ in range(RANSAC_K):
-            model, inliers = skimage.measure.ransac(
-                self.edge_points, skimage.measure.EllipseModel, RANSAC_D,
-                RANSAC_T, max_trials=1
-            )
-            ellipse = (
-                model.params[:2],
-                [model.params[2] * 2, model.params[3] * 2],
-                model.params[4] * 180 / np.pi
-            )
-            this_err = self.model_err(ellipse, sum(inliers))
-            if this_err < best_err:
-                best_err = this_err
-                models.append((ellipse, inliers))
-
-        for ellipse, inliers in models:
-            self.logger.debug("Found model with %d inliers: %s", sum(inliers),
-                              repr(ellipse))
-            for i, inlier in enumerate(inliers):
-                if not inlier:
-                    continue
-                x, y = self.edge_points[i]
-                self.processed[y, x] = (255, 255, 0)
-            cv2.ellipse(
-                self.processed, ellipse, (255, 0, 255), 1
-            )
-        return map(lambda m: m[0], models)
-
-    def ransac_ellipses(self):
-        RANSAC_K = 500
-        RANSAC_N = 5
-        RANSAC_T = 0.05
-        RANSAC_D = 10
-
-        best_err = float('inf')
-        best_fit = None
-        best_inliers = None
-        for _ in range(RANSAC_K):
-            maybe_inliers = random.sample(self.edge_points, RANSAC_N)
-            maybe_model = cv2.fitEllipse(np.array(maybe_inliers))
-            also_inliers = []
-            for point in self.edge_points:
-                if self.point_in_list(point, maybe_inliers):
-                    continue
-                if self.point_around_ellipse(point, maybe_model, RANSAC_T):
-                    also_inliers.append(point)
-            inliers = maybe_inliers + also_inliers
-            if len(inliers) < RANSAC_D:
-                continue
-            better_model = cv2.fitEllipse(np.array(inliers))
-            this_err = self.model_err(better_model, inliers)
-            if this_err < best_err:
-                self.logger.debug("err went %f -> %f", best_err, this_err)
-                best_err = this_err
-                best_fit = better_model
-                best_inliers = inliers
-        cv2.ellipse(self.processed, best_fit, (255, 0, 0), 1)
-        for point in best_inliers:
-            self.logger.debug("point: %s", repr(point))
-            cv2.circle(self.processed, tuple(point), 1, (255, 0, 255), 1)
-        return [best_fit]
+    def merge_contours(self, contours):
+        contours = list(filter(lambda c: len(c) >= 5, contours))
+        ret = contours
+        for _ in range(500):
+            sample = random.sample(contours, 2)
+            ret.append(np.concatenate(sample))
+        return ret
 
     def point_in_list(self, point, l):
         for p in l:
@@ -321,7 +266,7 @@ class EllipseDetection(object):
             return False
         elif e_class == "big":
             # Big ellipses could be ears
-            if minor / major < 0.6 and (45 < angle < 135):
+            if minor / major < 0.8 and (60 < angle < 120):
                 # Rotated and very elongated
                 return False
 
@@ -362,7 +307,7 @@ class EllipseDetection(object):
         b = ellipse[1][1] / 2
         phi = ellipse[2] * np.pi / 180.0
         outside_angle = 0
-        min_dist = max(1.125, ceil(0.05 * max(a, b)))
+        min_dist = min(3, max(1.125, ceil(0.05 * max(a, b))))
         for angle in range(0, 360, ANGLE_INCREMENT):
             rad = angle * np.pi / 180
             # Circle parametrisation
@@ -389,4 +334,6 @@ class EllipseDetection(object):
             if dist > min_dist:
                 outside_angle += ANGLE_INCREMENT
 
-        return outside_angle <= 360 / 8
+        cls = self.ellipse_classify(ellipse)
+        max_outside = 10 if cls == 'small' else 20
+        return outside_angle <= 360 / max_outside
