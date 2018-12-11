@@ -15,8 +15,8 @@ from head_detection import ObjectDetection
 
 CLAHE_CLIP_LIMIT = 2.0
 CLAHE_GRID_SIZE = (2, 2)
-CANNY_T1 = 100
-CANNY_T2 = 200
+CANNY_T1 = 120
+CANNY_T2 = 180
 # Factor we increase the bounding boxes by in each direction
 BB_MULT = 1.25
 FRAMERATE = 1/5.0

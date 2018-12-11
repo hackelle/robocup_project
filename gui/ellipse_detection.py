@@ -25,7 +25,8 @@ class EllipseDetection(object):
         # Flatten list
         self.edge_points = [point[0] for contour in contours for point in contour]
         self.edge_points = np.array(self.edge_points)
-        self.logger.debug("Pre-merge: %d contours", len(contours))
+        contours = list(filter(lambda c: len(c) >= 5, contours))
+        self.logger.debug("Post-filter: %d contours", len(contours))
         contours = self.merge_contours(contours)
         self.logger.debug("Post-merge: %d contours", len(contours))
         ellipses = self.filter_good_ellipses(contours)
@@ -39,12 +40,43 @@ class EllipseDetection(object):
         return self.facial_structure(ellipses)
 
     def merge_contours(self, contours):
-        contours = list(filter(lambda c: len(c) >= 5, contours))
-        ret = contours
-        for _ in range(500):
-            sample = random.sample(contours, 2)
-            ret.append(np.concatenate(sample))
+        MAX_DIST_TO_MERGE = 5
+
+        contour_dist = self.contour_distances(contours)
+        self.logger.debug("Distance matrix shape: %s", repr(contour_dist.shape))
+        ret = copy(contours)
+
+        for i, c1 in enumerate(contours):
+            for j in range(i + 1, len(contours)):
+                c2 = contours[j]
+                if contour_dist[i, j] <= MAX_DIST_TO_MERGE:
+                    ret.append(np.concatenate((c1, c2)))
+
         return ret
+
+    def contour_distances(self, contours):
+        dists = np.zeros((len(contours), len(contours)))
+        for i, c1 in enumerate(contours):
+            for j in range(i + 1, len(contours)):
+                c2 = contours[j]
+                dist = self.contour_distance(c1, c2)
+                dists[i, j] = dists[j, i] = dist
+        return dists
+
+    def contour_distance(self, c1, c2):
+        NTH_POINT = 3
+
+        if len(c1) < len(c2):
+            c1, c2, = c2, c1
+
+        c2 = np.array(list(map(lambda p: p[0], c2)))
+        min_dist = float('inf')
+        for i in range(0, len(c1), NTH_POINT):
+            p = tuple(c1[i][0])
+            dist = abs(cv2.pointPolygonTest(c2, p, True))
+            if dist < min_dist:
+                min_dist = dist
+        return min_dist
 
     def point_in_list(self, point, l):
         for p in l:
@@ -107,10 +139,13 @@ class EllipseDetection(object):
         """
         good = []
 
-        for c in contours:
+        for i, c in enumerate(contours):
             if len(c) < 5:     # cant find ellipse with less
+                self.logger.warning("Contour is too small: %d", i)
                 continue
-            ellipse = cv2.fitEllipse(c)
+            ellipse = cv2.fitEllipseDirect(c)
+            cv2.ellipse(self.processed, ellipse,
+                        (255 - i * (255 / len(contours)), 0, 0), 1)
             if self.check_ellipse(ellipse, c):
                 good.append(copy(ellipse))
 
@@ -335,5 +370,5 @@ class EllipseDetection(object):
                 outside_angle += ANGLE_INCREMENT
 
         cls = self.ellipse_classify(ellipse)
-        max_outside = 10 if cls == 'small' else 20
+        max_outside = 8 if cls == 'small' else 16
         return outside_angle <= 360 / max_outside
