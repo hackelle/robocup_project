@@ -31,8 +31,6 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
         self.edges = []
         self.edges_old = []
 
-        self.create_vision(args)
-        self.create_keybindings()
         # actual vision
         self.vision = None
         self.vision_thread = None
@@ -40,6 +38,8 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
         self._pause_shortcut = None
         self._next_shortcut = None
         self._prev_shortcut = None
+        self.create_vision(args)
+        self.create_keybindings()
 
     def create_vision(self, args):
         if args.img_source == 'rt':
