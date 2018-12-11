@@ -1,5 +1,6 @@
 import logging
 from math import pi, sin
+from functools import reduce
 
 import cv2
 import numpy as np
@@ -11,6 +12,7 @@ NAO_HFOV = 60.97 / 180 * pi
 NAO_VFOV = 47.64 / 180 * np.pi
 NAO_FOCAL_LENGTH = ((NAO_SENSOR_HEIGHT / 2) / sin(NAO_VFOV/2)
                     * sin(pi/2 - NAO_VFOV/2))
+ROBOCUP_MAX_DIST = 9000  # mm
 IMG_WIDTH = 480
 IMG_HEIGHT = 480
 
@@ -28,8 +30,9 @@ class GeometryCreation(object):
         """
         Calculate/create the geometry.
 
-        :return: A list of robots by position and orientation
-        :rtype: list(tuple((x, y), theta))
+        :return: A list of robots by position and orientation and a list of
+                 polygons
+        :rtype: list(tuple((x, y), theta)), list(np.array)
         """
         geometry = []
         for i, face in enumerate(self.faces):
@@ -59,7 +62,30 @@ class GeometryCreation(object):
             else:
                 self.logger.warn("Unsure about orientation of face %i", i)
 
-        return geometry
+        fovs = self.create_fovs(geometry)
+
+        return geometry, fovs
+
+    def create_fovs(self, geometry):
+        fovs = []
+        for robot in geometry:
+            fovs.append(self.make_fov(robot))
+
+        return fovs
+
+    def make_fov(self, robot):
+        location, facing = robot
+        location = np.array(location)
+        fov1 = np.array([
+            ROBOCUP_MAX_DIST * np.cos(facing + NAO_HFOV / 2),
+            -ROBOCUP_MAX_DIST * np.sin(facing + NAO_HFOV / 2),
+        ]) + location
+        fov2 = np.array([
+            ROBOCUP_MAX_DIST * np.cos(facing - NAO_HFOV / 2),
+            -ROBOCUP_MAX_DIST * np.sin(facing - NAO_HFOV / 2),
+        ]) + location
+
+        return np.array([fov1, fov2])
 
     def calculate_radial_angle(self, box):
         rows = box[2] - box[0]
@@ -100,26 +126,44 @@ class GeometryCreation(object):
 
     def draw(self, geometry):
         """Draw the geometry into a new OpenCV image and return it."""
-        img = np.zeros((IMG_WIDTH, IMG_HEIGHT, 3), np.uint8)
-        cv2.circle(img, (IMG_WIDTH / 2, IMG_HEIGHT), 11, (255, 0, 0), -1)
 
-        for robot in geometry:
+        geometry, fovs = geometry
+        img = np.zeros((IMG_WIDTH, IMG_HEIGHT, 3), np.uint8)
+
+        fov_drawings = []
+
+        for i, robot in enumerate(geometry):
+            fov = fovs[i]
             location, facing = robot
             center = (
                 int(round(IMG_WIDTH / 4000.0 * location[0] + IMG_WIDTH / 2.0)),
-                IMG_HEIGHT - int(round(IMG_WIDTH / 4000.0 * location[1]))
+                IMG_HEIGHT / 2 - int(round(IMG_WIDTH / 4000.0 * location[1]))
             )
             self.logger.debug("center [px]: {}".format(center))
             cv2.circle(img, center, 5, (0, 255, 0), -1)
 
-            fov_1 = (
-                int(round(center[0] + 600 * np.cos(facing + NAO_HFOV / 2))),
-                int(round(center[1] + 600 * np.sin(facing + NAO_HFOV / 2)))
-            )
-            fov_2 = (
-                int(round(center[0] + 600 * np.cos(facing - NAO_HFOV / 2))),
-                int(round(center[1] + 600 * np.sin(facing - NAO_HFOV / 2)))
-            )
-            cv2.line(img, center, fov_1, (0, 0, 255), 1)
-            cv2.line(img, center, fov_2, (0, 0, 255), 1)
+            fov[0] *= IMG_WIDTH / 4000.0 * np.array([1, -1])
+            fov[0] += np.array([IMG_WIDTH, IMG_HEIGHT]) / 2.0
+            fov[0] = np.rint(fov[0])
+            fov[1] *= IMG_WIDTH / 4000.0 * np.array([1, -1])
+            fov[1] += np.array([IMG_WIDTH, IMG_HEIGHT]) / 2.0
+            fov[1] = np.rint(fov[1])
+            fov = fov.astype(int)
+
+            cv2.line(img, center, tuple(fov[0]),
+                     (0, 0, 255), 1)
+            cv2.line(img, center, tuple(fov[1]),
+                     (0, 0, 255), 1)
+
+            fov_drawing = np.zeros((IMG_WIDTH, IMG_HEIGHT, 3), np.uint8)
+            triangle_cnt = np.array([center, tuple(fov[0]), tuple(fov[1])])
+            cv2.drawContours(fov_drawing, np.array([triangle_cnt]), 0,
+                             (0, 255, 255), -1)
+            fov_drawings.append(fov_drawing)
+
+        fov_intersection = reduce(np.bitwise_and, fov_drawings, np.ones((
+            IMG_WIDTH, IMG_HEIGHT, 3), np.uint8) * 255)
+        img += fov_intersection
+
+        cv2.circle(img, (IMG_WIDTH / 2, IMG_HEIGHT / 2), 11, (255, 0, 0), -1)
         return img
