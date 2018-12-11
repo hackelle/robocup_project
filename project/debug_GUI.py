@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 import threading
+import argparse
 
 from PyQt5 import QtWidgets, QtGui, QtCore
 
@@ -14,7 +15,7 @@ from logger import GUILogger
 
 
 class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
-    def __init__(self, parent=None):
+    def __init__(self, args, parent=None):
         super(GUI, self).__init__(parent)
         self._project_path = os.path.dirname(
             os.path.dirname(os.path.realpath(__file__))
@@ -30,7 +31,7 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
         self.edges = []
         self.edges_old = []
 
-        self.create_vision()
+        self.create_vision(args)
         self.create_keybindings()
         # actual vision
         self.vision = None
@@ -40,25 +41,20 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
         self._next_shortcut = None
         self._prev_shortcut = None
 
-    def create_vision(self):
+    def create_vision(self, args):
+        if args.img_source == 'rt':
+            img_provider = image_provider.RCVisionProvider(args.location)
+        elif args.img_source == 'img':
+            img_provider = image_provider.StorageVisionProvider(
+                os.path.join(args.location)
+            )
+        elif args.img_source == 'dir':
+            img_provider = image_provider.DirectoryVisionProvider(
+                os.path.join(args.location)
+            )
+
         self.vision = vision.Vision(
-            # image_provider.RCVisionProvider('10.0.7.14'),
-            image_provider.StorageVisionProvider(
-                os.path.join(
-                    self._project_path,
-                    # 'training-coding/pics/priya_20150326_default_225.png'
-                    'reference-images/tests',
-                    'converted-06.png'
-                )
-            ),
-            # image_provider.DirectoryVisionProvider(
-            #     os.path.join(
-            #         self._project_path,
-            #         'reference-images',
-            #         # 'two-robots'
-            #         'tests'
-            #     )
-            # ),
+            img_provider,
             os.path.join(
                 self._project_path,
                 'training-coding/models/roboheads-ssd_mobilenet_v1',
@@ -119,8 +115,23 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
         self.vision_thread.join()
 
 
-if __name__ == '__main__':
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Debug the SAERO-service')
+    parser.add_argument('img_source', choices=['rt', 'img', 'dir'],
+                        help='The type of image source (realtime, single image '
+                        'from disk or all images from a directory)')
+    parser.add_argument('location', help='The path for the given image source ('
+                        'IP or a path to a file/directory)')
+    return parser.parse_args()
+
+
+def main():
+    args = parse_arguments()
     app = QtWidgets.QApplication(sys.argv)
-    gui = GUI()
+    gui = GUI(args)
     gui.show()
     app.exec_()
+
+
+if __name__ == '__main__':
+    main()
