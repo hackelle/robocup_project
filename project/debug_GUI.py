@@ -43,21 +43,22 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
     def create_vision(self):
         self.vision = vision.Vision(
             # image_provider.RCVisionProvider('10.0.7.14'),
-            # image_provider.StorageVisionProvider(
-            #     os.path.join(
-            #         self._project_path,
-            #         # 'training-coding/pics/priya_20150326_default_225.png'
-            #         'reference-images/full',
-            #         'converted-two-robots-2.png'
-            #     )
-            # ),
-            image_provider.DirectoryVisionProvider(
+            image_provider.StorageVisionProvider(
                 os.path.join(
                     self._project_path,
-                    'reference-images',
-                    'two-robots'
+                    # 'training-coding/pics/priya_20150326_default_225.png'
+                    'reference-images/tests',
+                    'converted-06.png'
                 )
             ),
+            # image_provider.DirectoryVisionProvider(
+            #     os.path.join(
+            #         self._project_path,
+            #         'reference-images',
+            #         # 'two-robots'
+            #         'tests'
+            #     )
+            # ),
             os.path.join(
                 self._project_path,
                 'training-coding/models/roboheads-ssd_mobilenet_v1',
