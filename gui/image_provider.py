@@ -45,22 +45,23 @@ class StorageVisionProvider(ImageProvider):
 
 class DirectoryVisionProvider(ImageProvider):
     def __init__(self, path):
-        self.images = filter(
+        self.paths = filter(
             lambda p: os.path.isfile(p),
             map(
                 lambda p: os.path.join(path, p),
                 os.listdir(path)
             )
         )
-        logging.info(repr(self.images))
+        logging.info(repr(self.paths))
         self.images = map(
             lambda p: cv2.cvtColor(cv2.imread(p), cv2.COLOR_BGR2RGB),
-            self.images
+            self.paths
         )
         self.index = 0
 
     def get_image(self):
         self.index = (self.index + 1) % len(self.images)
+        logging.info("Image: %s", self.paths[self.index])
         return self.images[self.index].copy()
 
     def next(self):
