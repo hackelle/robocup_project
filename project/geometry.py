@@ -53,13 +53,11 @@ class GeometryCreation(object):
 
             # Calculate angle (between [0, 180] deg)
             facing_angle, sure = self.calculate_facing_angle(face)
-            self.logger.debug("local facing angle = {}".format(facing_angle))
-            facing_angle = radial_angle - facing_angle
-
-            geometry.append((location, facing_angle))
-
-            self.logger.debug("facing angle = {}, sure = {}".format(
-                facing_angle, sure))
+            if sure:
+                facing_angle = radial_angle - facing_angle
+                geometry.append((location, facing_angle))
+            else:
+                self.logger.warn("Unsure about orientation of face %i", i)
 
         return geometry
 
@@ -87,7 +85,6 @@ class GeometryCreation(object):
         if ear_location == 'right':
             angle = -angle
         sure = ear_location != 'middle'
-        # TODO: Do something when we're unsure
 
         return angle, sure
 

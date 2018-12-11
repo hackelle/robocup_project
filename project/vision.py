@@ -109,7 +109,6 @@ class Vision(QtCore.QObject):
         geometry_img = geometry_creation.draw(geometry)
         # TODO: Calculate the most likely angle, esp. if there are multiple
         # robots
-        # TODO: Some kind of action (e.g. turn that direction)
 
         for box in boxes:
             b = box['box']

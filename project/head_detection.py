@@ -13,7 +13,6 @@ INTERSECTION_MIN = 0.2
 class ObjectDetection(object):
     """Detect heads in the image using our Tensorflow model."""
 
-    # TODO: Retrain NN for preprocessed images
     def __init__(self, inference_graph):
         self.detection_graph = tf.Graph()
         self.logger = logging.getLogger()

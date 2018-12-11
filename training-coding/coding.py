@@ -126,7 +126,6 @@ class GUI(tkinter.Frame):
         if self._dragging:
             return
 
-        # TODO: Why is this Control?
         if ev.state == 0x0004:
             if self._active_rect == -1:
                 next_rect = 0
