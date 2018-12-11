@@ -1,9 +1,7 @@
 import logging
 import time
-import random
 from copy import copy
 from math import sqrt, cos, pi, ceil
-import skimage.measure
 
 import cv2
 import numpy as np
@@ -12,6 +10,8 @@ ANGLE_INCREMENT = 1
 
 
 class EllipseDetection(object):
+    """Ellipse detection and filtering"""
+
     def __init__(self, processed, edges):
         self.processed = processed
         self.edges = cv2.cvtColor(edges, cv2.COLOR_BGR2GRAY)
@@ -21,29 +21,45 @@ class EllipseDetection(object):
         self.edge_points = None
 
     def detect_ellipses(self):
+        """
+        Detect the eye/ear ellipses.
+
+        :return: A list of recognized eyes and an ear (or None)
+        :rtype: list, (ellipse or None)
+        """
         _, contours, _ = cv2.findContours(self.edges, 1, 2)
         # Flatten list
-        self.edge_points = [point[0] for contour in contours for point in contour]
+        self.edge_points = [point[0] for contour in contours
+                            for point in contour]
         self.edge_points = np.array(self.edge_points)
+
+        # Contour filtering/merging
         contours = list(filter(lambda c: len(c) >= 5, contours))
         self.logger.debug("Post-filter: %d contours", len(contours))
         contours = self.merge_contours(contours)
         self.logger.debug("Post-merge: %d contours", len(contours))
+
+        # Ellipse detection and first filter step
         ellipses = self.filter_good_ellipses(contours)
         self.logger.debug("First filter: %d ellipses", len(ellipses))
+        # TODO: Generate some images for report and remove
         for ellipse in ellipses:
             cv2.ellipse(self.processed, ellipse, (255, 255, 0), 1)
+
+        # Second filter step (merge overlapping ellipses)
         ellipses = self.filter_overlapping(ellipses)
+        # TODO: Generate some images for report and remove
         for ellipse in ellipses:
             cv2.ellipse(self.processed, ellipse, (0, 255, 255), 1)
         self.logger.debug("Second filter: %d ellipses", len(ellipses))
+
+        # Final filtering and classification
         return self.facial_structure(ellipses)
 
     def merge_contours(self, contours):
         MAX_DIST_TO_MERGE = 5
 
         contour_dist = self.contour_distances(contours)
-        self.logger.debug("Distance matrix shape: %s", repr(contour_dist.shape))
         ret = copy(contours)
 
         for i, c1 in enumerate(contours):
@@ -78,52 +94,8 @@ class EllipseDetection(object):
                 min_dist = dist
         return min_dist
 
-    def point_in_list(self, point, l):
-        for p in l:
-            if np.array_equal(p, point):
-                return True
-        return False
-
-    def point_around_ellipse(self, point, ellipse, mult):
-        """
-        Check if a point is around an ellipse.
-
-        :param point: The point
-        :param ellipse: The ellipse
-        :param mult: The multiplier difference which defines the threshold.
-                     E.g. if mult=0.2, then we check if the point is outside
-                     of an ellipse with a*=0.8, b*=0.8 and within an ellipse
-                     with a*=1.2, b*=1.2
-        """
-        inner = list(ellipse)
-        outer = list(ellipse)
-        return (not self.point_in_ellipse(point, inner) and
-                self.point_in_ellipse(point, outer))
-
-    def point_in_ellipse(self, point, ellipse):
-        # https://math.stackexchange.com/a/76463/101072
-        point = self.rotate_point(point, -ellipse[2])
-        x, y = point
-        c_x, c_y = ellipse[0]
-        a = ellipse[1][0] / 2
-        b = ellipse[1][1] / 2
-        return ((x - c_x) ** 2 / a ** 2 + (y - c_y) ** 2 / b ** 2) <= 1
-
-    def rotate_point(self, point, degrees):
-        rad = degrees / 180 * np.pi
-        c = np.cos(rad)
-        s = np.sin(rad)
-        x = point[0]
-        y = point[1]
-        return (
-            c * x - s * y,
-            s * x + c * y
-        )
-
-    def model_err(self, model, n_inliers):
-        return self.ellipse_area(model) / n_inliers
-
     def draw_ellipses(self, eyes, ear):
+        """Draw the ellipses into the (existing) processed image."""
         for eye in eyes:
             cv2.ellipse(self.processed, eye, (0, 255, 0), 1)
         if ear is not None:

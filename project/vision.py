@@ -26,6 +26,13 @@ RobotFace = namedtuple("RobotFace", "eyes ear box")
 
 
 class Vision(QtCore.QObject):
+    """
+    Main Vision hub.
+
+    Links the GUI, head detection, ellipse detection and geometry creation as
+    well as preprocessing the image in various ways.
+    """
+
     updated = QtCore.pyqtSignal(object)
 
     def __init__(self, image, inference_graph):
@@ -167,5 +174,3 @@ class Vision(QtCore.QObject):
 
     def stop(self):
         self._running = False
-
-

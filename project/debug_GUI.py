@@ -15,6 +15,8 @@ from logger import GUILogger
 
 
 class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
+    """Qt GUI Application widget for SAEROS"""
+
     def __init__(self, args, parent=None):
         super(GUI, self).__init__(parent)
         self._project_path = os.path.dirname(
@@ -23,7 +25,7 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
 
         self.setupUi(self)
         self.logger = logging.getLogger()
-        self.logger.addHandler(GUILogger())  # self.log_view))
+        self.logger.addHandler(GUILogger())
         self.logger.setLevel(logging.DEBUG)
         self.camera.setScaledContents(True)
 
@@ -92,8 +94,6 @@ class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
         self.show_images(self.edges_inner_old, images['edges'], self.edges_old,
                          images['scores'])
         self.drawing.setPixmap(images['drawing'])
-        # self.edges.setPixmap(images['edges'])
-        # self.temp.setPixmap(images['temp'])
 
     def show_images(self, tabs, images, labels, scores):
         tabs.clear()

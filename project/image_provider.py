@@ -8,6 +8,8 @@ from naoqi import ALProxy
 
 
 class ImageProvider(object):
+    """Provides images from an abstract source"""
+
     __metaclass__ = ABCMeta
 
     @abstractmethod
@@ -22,6 +24,8 @@ class ImageProvider(object):
 
 
 class RCVisionProvider(ImageProvider):
+    """Image provider using the realtime images from the NAO."""
+
     def __init__(self, address, camera_id=0):
         self.proxy = ALProxy('RobocupVision', address,
                              9559)
@@ -36,6 +40,8 @@ class RCVisionProvider(ImageProvider):
 
 
 class StorageVisionProvider(ImageProvider):
+    """Image provider using one image stored locally."""
+
     def __init__(self, path):
         self.image = cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
 
@@ -44,6 +50,8 @@ class StorageVisionProvider(ImageProvider):
 
 
 class DirectoryVisionProvider(ImageProvider):
+    """Image provider using multiple images stored in a local directory."""
+
     def __init__(self, path):
         self.paths = filter(
             lambda p: os.path.isfile(p),

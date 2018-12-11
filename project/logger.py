@@ -5,6 +5,8 @@ from threading import Lock
 
 
 class GUILogger(logging.Handler):
+    """Logger that originally logged to the GUI, but this no longer works."""
+
     widget = None
     mutex = Lock()
 

@@ -16,6 +16,8 @@ IMG_HEIGHT = 480
 
 
 class GeometryCreation(object):
+    """Geometry calculation/creation based on detected eyes/ears"""
+
     def __init__(self, faces, img_shape):
         self.faces = faces
         self.img_shape = img_shape
@@ -23,6 +25,12 @@ class GeometryCreation(object):
         self.logger = logging.getLogger()
 
     def create(self):
+        """
+        Calculate/create the geometry.
+
+        :return: A list of robots by position and orientation
+        :rtype: list(tuple((x, y), theta))
+        """
         geometry = []
         for i, face in enumerate(self.faces):
             if face.ear is None:
@@ -71,7 +79,7 @@ class GeometryCreation(object):
         angle = np.pi / 2 - angle
 
         if len(face.eyes) == 0:
-            # The robot is looking away from us, so add 180
+            # The robot is looking away from us, so add 180 deg
             angle += np.pi
 
         rows = face.box[2] - face.box[0]
@@ -94,6 +102,7 @@ class GeometryCreation(object):
             return 'middle'
 
     def draw(self, geometry):
+        """Draw the geometry into a new OpenCV image and return it."""
         img = np.zeros((IMG_WIDTH, IMG_HEIGHT, 3), np.uint8)
         cv2.circle(img, (IMG_WIDTH / 2, IMG_HEIGHT), 11, (255, 0, 0), -1)
 
