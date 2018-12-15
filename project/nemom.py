@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Form implementation generated from reading ui file 'saeros.ui'
+# Form implementation generated from reading ui file 'nemom.ui'
 #
 # Created by: PyQt5 UI code generator 5.11.3
 #
@@ -73,7 +73,7 @@ class Ui_MainWindow(object):
 
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "Saeros"))
+        MainWindow.setWindowTitle(_translate("MainWindow", "Nao-EMOM"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_camera), _translate("MainWindow", "Camera"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_temp), _translate("MainWindow", "Temp"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_edges_old), _translate("MainWindow", "Edges"))

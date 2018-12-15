@@ -10,12 +10,12 @@ from PyQt5 import QtWidgets, QtGui, QtCore
 
 import image_provider
 import vision
-import saeros
+import nemom
 from logger import GUILogger
 
 
-class GUI(QtWidgets.QMainWindow, saeros.Ui_MainWindow):
-    """Qt GUI Application widget for SAEROS"""
+class GUI(QtWidgets.QMainWindow, nemom.Ui_MainWindow):
+    """Qt GUI Application widget for Nao-EMOM"""
 
     def __init__(self, args, parent=None):
         super(GUI, self).__init__(parent)

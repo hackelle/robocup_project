@@ -1,4 +1,4 @@
-# Robocup Project: Saeros Head Angle Detection
+# Robocup Project: Nao-EMOM
 
 [SS18] PJ Rob
 Project Robocup
@@ -25,6 +25,3 @@ new:
 - Find Ellipses, devide them into possible ears and eyes
 - Calculate robot distance based on ear height
 - Calculate head angle based on ear width, position of eyes relative to the ear and if we see eyes at all
-
-
-Name inspiration by http://ardapedia.herr-der-ringe-film.de/index.php/Saeros
