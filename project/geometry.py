@@ -126,6 +126,7 @@ class GeometryCreation(object):
 
     def draw(self, geometry):
         """Draw the geometry into a new OpenCV image and return it."""
+        DRAWING_DIM = 6000.0
 
         geometry, fovs = geometry
         img = np.zeros((IMG_WIDTH, IMG_HEIGHT, 3), np.uint8)
@@ -136,16 +137,20 @@ class GeometryCreation(object):
             fov = fovs[i]
             location, facing = robot
             center = (
-                int(round(IMG_WIDTH / 4000.0 * location[0] + IMG_WIDTH / 2.0)),
-                IMG_HEIGHT / 2 - int(round(IMG_WIDTH / 4000.0 * location[1]))
+                int(round(
+                    IMG_WIDTH / DRAWING_DIM * location[0] + IMG_WIDTH / 2.0
+                )),
+                IMG_HEIGHT / 2 - int(round(
+                    IMG_WIDTH / DRAWING_DIM * location[1]
+                ))
             )
             self.logger.debug("center [px]: {}".format(center))
             cv2.circle(img, center, 5, (0, 255, 0), -1)
 
-            fov[0] *= IMG_WIDTH / 4000.0 * np.array([1, -1])
+            fov[0] *= IMG_WIDTH / DRAWING_DIM * np.array([1, -1])
             fov[0] += np.array([IMG_WIDTH, IMG_HEIGHT]) / 2.0
             fov[0] = np.rint(fov[0])
-            fov[1] *= IMG_WIDTH / 4000.0 * np.array([1, -1])
+            fov[1] *= IMG_WIDTH / DRAWING_DIM * np.array([1, -1])
             fov[1] += np.array([IMG_WIDTH, IMG_HEIGHT]) / 2.0
             fov[1] = np.rint(fov[1])
             fov = fov.astype(int)
@@ -161,9 +166,20 @@ class GeometryCreation(object):
                              (0, 255, 255), -1)
             fov_drawings.append(fov_drawing)
 
-        fov_intersection = reduce(np.bitwise_and, fov_drawings, np.ones((
-            IMG_WIDTH, IMG_HEIGHT, 3), np.uint8) * 255)
-        img += fov_intersection
+        if len(fov_drawings) > 0:
+            fov_intersection = reduce(np.bitwise_and, fov_drawings, np.ones((
+                IMG_WIDTH, IMG_HEIGHT, 3), np.uint8) * 255)
+            img += fov_intersection
 
         cv2.circle(img, (IMG_WIDTH / 2, IMG_HEIGHT / 2), 11, (255, 0, 0), -1)
+
+        # Draw concentric circles every meter
+        for r in range(1000, 11000, 1000):
+            r_px = int(round(r * IMG_WIDTH / DRAWING_DIM))
+            cv2.circle(img, (IMG_WIDTH / 2, IMG_HEIGHT / 2), r_px,
+                       (255, 255, 255), 1)
+            cv2.putText(img, "{} m".format(r / 1000),
+                        (IMG_WIDTH / 2 + r_px, IMG_HEIGHT / 2),
+                        cv2.FONT_HERSHEY_PLAIN, 1.0, (255, 255, 0))
+
         return img
