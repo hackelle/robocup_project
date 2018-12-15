@@ -158,6 +158,12 @@ class EllipseDetection(object):
     def ellipse_area(self, ellipse):
         return np.pi * ellipse[1][0] * ellipse[1][1] / 4
 
+    def ellipse_x_coords(self, ellipse):
+        x_dim = ellipse[1][0] * cos(ellipse[2] / 180 * pi)
+
+        return (ellipse[0][0] - x_dim / 2,
+                ellipse[0][0] + x_dim / 2)
+
     def ellipse_y_coords(self, ellipse):
         y_dim = ellipse[1][1] * cos(ellipse[2] / 180 * pi)
 
@@ -202,15 +208,21 @@ class EllipseDetection(object):
 
         if ear is not None:
             new_small = []
+            ear_x = self.ellipse_x_coords(ear)
             ear_y = self.ellipse_y_coords(ear)
             for e in small:
+                # Check that the eye doesn't overlap with the ear
+                if ear_x[0] < e[0][0] < ear_x[1]:
+                    self.logger.info("Small ellipse at same x coords as ear")
+                    continue
+
                 # Check that the eye isn't above or below the ear
                 self.logger.info("Eye is at %f, ear at [%f, %f]", e[0][1],
                                  ear_y[0], ear_y[1])
                 if ear_y[0] < e[0][1] < ear_y[1]:
                     new_small.append(e)
                 else:
-                    self.logger.warn("Eye above/below ear")
+                    self.logger.info("Small ellipse above/below ear")
             small = new_small
 
         if len(small) < 2:
