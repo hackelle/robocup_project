@@ -7,6 +7,11 @@ import cv2
 import numpy as np
 
 ANGLE_INCREMENT = 1
+EAR_MIN_SIZE = 0.25
+EAR_MAX_SIZE = 0.5
+EAR_MAX_OUTSIDE = 6.25
+EYE_MAX_SIZE = 0.15
+EYE_MAX_OUTSIDE = 8
 
 
 class EllipseDetection(object):
@@ -143,7 +148,6 @@ class EllipseDetection(object):
                 if distance <= max_distance:
                     candidates.append(ellipse)
 
-            time.sleep(0.01)
             if len(candidates) > 1:
                 max_e = max(candidates, key=self.ellipse_area)
                 i -= 1
@@ -179,17 +183,14 @@ class EllipseDetection(object):
                          this is None, we won't check against ellipses that we
                          can't be sure about
         """
-        area = self.ellipse_area(ellipse)
-        if area < 1:
-            return "very small"
-        elif n_points is not None and n_points / area <= 0.02:
-            return "unsure"
-        elif 0.2 > area / self.head_area > 0.03:
+        height = ellipse[1][1] / self.rows
+
+        if EAR_MIN_SIZE <= height <= EAR_MAX_SIZE:
             return "big"
-        elif 0.03 >= area / self.head_area > 0.0025:
+        elif height <= EYE_MAX_SIZE:
             return "small"
         else:
-            return "wrong"
+            return "invalid"
 
     def facial_structure(self, ellipses):
         """
@@ -279,23 +280,21 @@ class EllipseDetection(object):
 
         # We're only interested in eyes or ears, so we filter out all ellipses
         # that can't be either
-        if e_class == "very small":
-            return False
-        elif e_class == "unsure":
-            return False
-        elif e_class == "big":
+        if e_class == "big":
             # Big ellipses could be ears
             if minor / major < 0.8 and (60 < angle < 120):
+                self.logger.debug("Rotated, very elongated")
                 # Rotated and very elongated
                 return False
 
             if r_center > self.rows * 0.75 or r_center < self.rows * 0.3:
+                self.logger.debug("Too high/low")
                 # Too high/low on the head
                 return False
         elif e_class == "small":
             # Small ellipses could be eyes
             if minor / major < 0.3 and (45 < angle < 135):
-                # Rotate and very elongated
+                # Rotated and very elongated
                 return False
 
             if r_center > self.rows * 0.8 or r_center < self.rows * 0.4:
@@ -354,5 +353,5 @@ class EllipseDetection(object):
                 outside_angle += ANGLE_INCREMENT
 
         cls = self.ellipse_classify(ellipse)
-        max_outside = 8 if cls == 'small' else 16
+        max_outside = EYE_MAX_OUTSIDE if cls == 'small' else EAR_MAX_OUTSIDE
         return outside_angle <= 360 / max_outside
