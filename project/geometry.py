@@ -6,7 +6,10 @@ import cv2
 import numpy as np
 
 NAO_EAR_HEIGHT = 62.1  # mm
+NAO_EYE_DIST = 51.7  # mm
+NAO_IMG_WIDTH = 640  # px
 NAO_IMG_HEIGHT = 480  # px
+NAO_SENSOR_WIDTH = 1288 * 1.9E-3  # mm
 NAO_SENSOR_HEIGHT = 968 * 1.9E-3  # mm
 NAO_HFOV = 60.97 / 180 * pi
 NAO_VFOV = 47.64 / 180 * np.pi
@@ -38,15 +41,25 @@ class GeometryCreation(object):
         """
         geometry = []
         for i, face in enumerate(self.faces):
-            if face.ear is None:
-                self.logger.warn("Face %i has no ear, aborting!", i)
+            if face.ear is not None:
+                height = face.ear[1][1]
+                dist = (
+                    (NAO_FOCAL_LENGTH * NAO_EAR_HEIGHT * NAO_IMG_HEIGHT) /
+                    (height * NAO_SENSOR_HEIGHT)
+                )
+            elif len(face.eyes) == 2:
+                # x coord = [eye_i][0 = center][0 = x]
+                eye_dist = abs(face.eyes[0][0][0] - face.eyes[1][0][0])
+                dist = (
+                    NAO_FOCAL_LENGTH * NAO_EYE_DIST * NAO_IMG_WIDTH /
+                    (eye_dist * NAO_SENSOR_WIDTH)
+                )
+            else:
+                self.logger.warn(
+                    "Face %i has not enough information, aborting!", i
+                )
                 continue
 
-            height = face.ear[1][1]
-            dist = (
-                (NAO_FOCAL_LENGTH * NAO_EAR_HEIGHT * NAO_IMG_HEIGHT) /
-                (height * NAO_SENSOR_HEIGHT)
-            )
             radial_angle = self.calculate_radial_angle(face.box)
             self.logger.debug("Radial: {}, {}".format(dist, radial_angle))
             location = (
@@ -98,6 +111,12 @@ class GeometryCreation(object):
         return fov_angle + np.pi / 2
 
     def calculate_facing_angle(self, face):
+        if face.ear is None:
+            if len(face.eyes) != 2:
+                self.logger.error("No ear and no 2 eyes!?")
+                return 0, False
+            return 0, True
+
         # This will return the angle from the (local!) x axis...
         angle = np.arccos(face.ear[1][0] / face.ear[1][1])
         self.logger.debug("angle before correction: {}".format(angle))
