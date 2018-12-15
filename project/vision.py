@@ -4,6 +4,7 @@ import time
 import logging
 from threading import Lock, Condition
 from collections import namedtuple
+from copy import deepcopy
 
 from PyQt5 import QtGui, QtCore
 
@@ -94,7 +95,7 @@ class Vision(QtCore.QObject):
         for i, box in enumerate(boxes):
             cropped.append(self.crop(img, box['box']))
             self.logger.debug("Preprocessing Box #%i...", i)
-            processed.append(self.preprocess(cropped[-1]))
+            processed.append(deepcopy(cropped[-1]))
             self.logger.debug("Detecting edges in Box #%i...", i)
             edges.append(self.edge_detection(processed[-1]))
             self.logger.debug("Detecting ellipses in Box #%i...", i)
