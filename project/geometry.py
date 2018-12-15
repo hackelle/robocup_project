@@ -16,6 +16,8 @@ ROBOCUP_MAX_DIST = 9000  # mm
 IMG_WIDTH = 480
 IMG_HEIGHT = 480
 
+EAR_CENTER_FRACTION = 21.0
+
 
 class GeometryCreation(object):
     """Geometry calculation/creation based on detected eyes/ears"""
@@ -117,9 +119,12 @@ class GeometryCreation(object):
     def ear_location(self, ear, rows):
         ear_x = ear[0][0]
 
-        if ear_x < 2 * rows / 5.0:
+        left_part = EAR_CENTER_FRACTION // 2
+        right_part = left_part + 1
+
+        if ear_x <= left_part * rows / EAR_CENTER_FRACTION:
             return 'left'
-        elif ear_x > 4 * rows / 5.0:
+        elif ear_x >= right_part * rows / EAR_CENTER_FRACTION:
             return 'right'
         else:
             return 'middle'

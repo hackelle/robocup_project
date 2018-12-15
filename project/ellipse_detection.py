@@ -7,11 +7,12 @@ import cv2
 import numpy as np
 
 ANGLE_INCREMENT = 1
-EAR_MIN_SIZE = 0.25
-EAR_MAX_SIZE = 0.5
-EAR_MAX_OUTSIDE = 6.25
-EYE_MAX_SIZE = 0.15
-EYE_MAX_OUTSIDE = 8
+EAR_MIN_SIZE = 0.25  # relative to head size
+EAR_MAX_SIZE = 0.5   # relative to head size
+EAR_MAX_OUTSIDE = 8  # fraction of circle that may not have edge pixels
+EYE_MIN_SIZE = 8     # px
+EYE_MAX_SIZE = 0.15  # relative to head size
+EYE_MAX_OUTSIDE = 8  # fraction of circle that may not have edge pixels
 
 
 class EllipseDetection(object):
@@ -183,11 +184,13 @@ class EllipseDetection(object):
                          this is None, we won't check against ellipses that we
                          can't be sure about
         """
+        self.logger.debug(repr(ellipse))
         height = ellipse[1][1] / self.rows
 
         if EAR_MIN_SIZE <= height <= EAR_MAX_SIZE:
+            self.logger.debug("Big ellipse!")
             return "big"
-        elif height <= EYE_MAX_SIZE:
+        elif EYE_MIN_SIZE <= ellipse[1][1] and height <= EYE_MAX_SIZE:
             return "small"
         else:
             return "invalid"
@@ -277,6 +280,9 @@ class EllipseDetection(object):
         minor = ellipse[1][0]
         major = ellipse[1][1]
         angle = ellipse[2]
+
+        if minor / major < 0.1:
+            return False
 
         # We're only interested in eyes or ears, so we filter out all ellipses
         # that can't be either
