@@ -176,14 +176,15 @@ class EllipseDetection(object):
         return np.pi * ellipse[1][0] * ellipse[1][1] / 4
 
     def ellipse_x_coords(self, ellipse):
-        x_dim = abs(ellipse[1][0] * cos(ellipse[2] / 180 * pi))
+        x_dim = abs(ellipse[1][1] * cos(ellipse[2] / 180 * pi - pi/2))
+        x_dim = max(x_dim, ellipse[1][0])
 
         return (ellipse[0][0] - x_dim / 2,
                 ellipse[0][0] + x_dim / 2)
 
     def ellipse_y_coords(self, ellipse):
         y_dim = abs(ellipse[1][1] * cos(ellipse[2] / 180 * pi))
-
+        y_dim = max(y_dim, ellipse[1][0])
         return (ellipse[0][1] - y_dim / 2,
                 ellipse[0][1] + y_dim / 2)
 
@@ -236,6 +237,8 @@ class EllipseDetection(object):
                 # Check that the eye isn't above or below the ear
                 self.logger.info("Eye is at %f, ear at [%f, %f]", e[0][1],
                                  ear_y[0], ear_y[1])
+                self.logger.debug(repr(ear))
+                self.logger.debug(repr(e))
                 if ear_y[0] < e[0][1] < ear_y[1]:
                     new_small.append(e)
                 else:
