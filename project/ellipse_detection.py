@@ -2,6 +2,7 @@ import logging
 import time
 from copy import copy
 from math import sqrt, cos, pi, ceil
+from functools import reduce
 
 import cv2
 import numpy as np
@@ -139,16 +140,13 @@ class EllipseDetection(object):
         :return: List of filtered ellipses
         :rtype: list
         """
-        max_distance = 0.05 * sqrt(self.head_area)
         i = 0
         while i < len(ellipses) - 1:
-            center = ellipses[i][0]
+            e = ellipses[i][0]
             candidates = [ellipses[i]]
 
             for ellipse in ellipses[i+1:]:
-                c = ellipse[0]
-                distance = sqrt((center[0] - c[0])**2 + (center[1] - c[1])**2)
-                if distance <= max_distance:
+                if self.ellipses_overlapping(e, ellipse):
                     candidates.append(ellipse)
 
             if len(candidates) > 1:
@@ -161,6 +159,17 @@ class EllipseDetection(object):
             i += 1
 
         return ellipses
+
+    def ellipses_overlapping(self, e1, e2):
+        d1 = np.zeros((self.cols, self.rows, 3), np.uint8)
+        cv2.ellipse(d1, e1, (1, 0, 0), -1)
+        d2 = np.zeros((self.cols, self.rows, 3), np.uint8)
+        cv2.ellipse(d2, e2, (1, 0, 0), -1)
+        intersection = reduce(
+            np.bitwise_and, [d1, d2],
+            np.ones((self.cols, self.rows, 3), np.uint8) * 255
+        )
+        pass
 
     def ellipse_area(self, ellipse):
         return np.pi * ellipse[1][0] * ellipse[1][1] / 4

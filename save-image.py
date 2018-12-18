@@ -6,7 +6,7 @@ import numpy as np
 import sys
 
 
-ADDRESS = '10.0.7.15'
+ADDRESS = '10.0.7.14'
 CAMERA_ID = 0
 
 
