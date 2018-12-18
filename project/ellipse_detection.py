@@ -10,7 +10,9 @@ ANGLE_INCREMENT = 1
 EAR_MIN_SIZE = 0.25  # relative to head size
 EAR_MAX_SIZE = 0.5   # relative to head size
 EAR_MAX_OUTSIDE = 8  # fraction of circle that may not have edge pixels
-EYE_MIN_SIZE = 8     # px
+EAR_MAX_ANGLE = 20   # degrees the ellipse may be rotated by
+EYE_MIN_HEIGHT = 8   # px
+EYE_MIN_WIDTH = 4    # px
 EYE_MAX_SIZE = 0.15  # relative to head size
 EYE_MAX_OUTSIDE = 8  # fraction of circle that may not have edge pixels
 
@@ -164,13 +166,13 @@ class EllipseDetection(object):
         return np.pi * ellipse[1][0] * ellipse[1][1] / 4
 
     def ellipse_x_coords(self, ellipse):
-        x_dim = ellipse[1][0] * cos(ellipse[2] / 180 * pi)
+        x_dim = abs(ellipse[1][0] * cos(ellipse[2] / 180 * pi))
 
         return (ellipse[0][0] - x_dim / 2,
                 ellipse[0][0] + x_dim / 2)
 
     def ellipse_y_coords(self, ellipse):
-        y_dim = ellipse[1][1] * cos(ellipse[2] / 180 * pi)
+        y_dim = abs(ellipse[1][1] * cos(ellipse[2] / 180 * pi))
 
         return (ellipse[0][1] - y_dim / 2,
                 ellipse[0][1] + y_dim / 2)
@@ -190,7 +192,8 @@ class EllipseDetection(object):
         if EAR_MIN_SIZE <= height <= EAR_MAX_SIZE:
             self.logger.debug("Big ellipse!")
             return "big"
-        elif EYE_MIN_SIZE <= ellipse[1][1] and height <= EYE_MAX_SIZE:
+        elif (EYE_MIN_WIDTH <= ellipse[1][0] and
+              EYE_MIN_HEIGHT <= ellipse[1][1] and height <= EYE_MAX_SIZE):
             return "small"
         else:
             return "invalid"
@@ -288,7 +291,8 @@ class EllipseDetection(object):
         # that can't be either
         if e_class == "big":
             # Big ellipses could be ears
-            if minor / major < 0.8 and (60 < angle < 120):
+            if minor / major < 0.8 and \
+               (90 - EAR_MAX_ANGLE < angle < 90 + EAR_MAX_ANGLE):
                 self.logger.debug("Rotated, very elongated")
                 # Rotated and very elongated
                 return False
