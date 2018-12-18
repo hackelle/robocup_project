@@ -60,12 +60,13 @@ class DirectoryVisionProvider(ImageProvider):
                 os.listdir(path)
             )
         )
+        self.paths.sort()
         logging.info(repr(self.paths))
         self.images = map(
             lambda p: cv2.cvtColor(cv2.imread(p), cv2.COLOR_BGR2RGB),
             self.paths
         )
-        self.index = 0
+        self.index = -1
 
     def get_image(self):
         self.index = (self.index + 1) % len(self.images)
