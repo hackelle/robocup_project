@@ -16,6 +16,7 @@ EYE_MIN_HEIGHT = 8   # px
 EYE_MIN_WIDTH = 4    # px
 EYE_MAX_SIZE = 0.15  # relative to head size
 EYE_MAX_OUTSIDE = 8  # fraction of circle that may not have edge pixels
+ELLIPSE_OVERLAP = 10 # pixel for overlaping ellipses
 
 
 class EllipseDetection(object):
@@ -142,11 +143,12 @@ class EllipseDetection(object):
         """
         i = 0
         while i < len(ellipses) - 1:
-            e = ellipses[i][0]
+            current_ellipse = ellipses[i]
             candidates = [ellipses[i]]
 
             for ellipse in ellipses[i+1:]:
-                if self.ellipses_overlapping(e, ellipse):
+                if self.ellipses_overlapping(current_ellipse, ellipse):
+                    self.logger.debug("Ellipses overlap!")
                     candidates.append(ellipse)
 
             if len(candidates) > 1:
@@ -161,15 +163,14 @@ class EllipseDetection(object):
         return ellipses
 
     def ellipses_overlapping(self, e1, e2):
-        d1 = np.zeros((self.cols, self.rows, 3), np.uint8)
+        d1 = np.zeros((self.rows, self.cols, 3), np.uint8)
+        self.logger.debug(repr(e1))
         cv2.ellipse(d1, e1, (1, 0, 0), -1)
-        d2 = np.zeros((self.cols, self.rows, 3), np.uint8)
+        d2 = np.zeros((self.rows, self.cols, 3), np.uint8)
         cv2.ellipse(d2, e2, (1, 0, 0), -1)
-        intersection = reduce(
-            np.bitwise_and, [d1, d2],
-            np.ones((self.cols, self.rows, 3), np.uint8) * 255
-        )
-        pass
+        intersection = np.bitwise_and(d1, d2)
+        overlap = sum(intersection.flatten())
+        return overlap > ELLIPSE_OVERLAP
 
     def ellipse_area(self, ellipse):
         return np.pi * ellipse[1][0] * ellipse[1][1] / 4
