@@ -178,6 +178,7 @@ class GeometryCreation(object):
             fov[1] += np.array([IMG_WIDTH, IMG_HEIGHT]) / 2.0
             fov[1] = np.rint(fov[1])
             fov = fov.astype(int)
+            self.logger.debug("their fov: %s", repr(fov))
 
             cv2.line(img, center, tuple(fov[0]),
                      (0, 0, 255), 1)
@@ -195,6 +196,21 @@ class GeometryCreation(object):
                 IMG_WIDTH, IMG_HEIGHT, 3), np.uint8) * 255)
             img += fov_intersection
 
+        center = np.array([IMG_WIDTH / 2, IMG_HEIGHT / 2])
+        fov = np.array([[0., 0.], [0., 0.]])
+        fov[0] = np.rint(center + np.array([
+            np.sin(NAO_HFOV / 2) * IMG_WIDTH,
+            -np.cos(NAO_HFOV / 2) * IMG_WIDTH
+        ]))
+        fov[1] = np.rint(center + np.array([
+            np.sin(-NAO_HFOV / 2) * IMG_WIDTH,
+            -np.cos(-NAO_HFOV / 2) * IMG_WIDTH
+        ]))
+        fov = fov.astype(int)
+        center = tuple(center.astype(int))
+        self.logger.debug("our fov: %s", repr(fov))
+        cv2.line(img, center, tuple(fov[0]), (255, 0, 0), 1)
+        cv2.line(img, center, tuple(fov[1]), (255, 0, 0), 1)
         cv2.circle(img, (IMG_WIDTH / 2, IMG_HEIGHT / 2), 11, (255, 0, 0), -1)
 
         # Draw concentric circles every meter
