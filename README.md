@@ -1,27 +1,35 @@
-# Robocup Project: Nao-EMOM
+# Robocup Project: Nao EMOM
 
 [SS18] PJ Rob
 Project Robocup
 TU Berlin
 
-## Collaborators:
+## Collaborators
 - Hackel, Leonard
 - Mengers, Vito
-- v. Blanckenburg, Jasper 
+- v. Blanckenburg, Jasper
 
-## Project goal:
+## Dependencies
+- PyQT 5
+- Python TensorFlow
+- TensorFlow Object Detection
+- Python 2.7
+- numpy
+- OpenCV
 
-Detect the direction other robots are looking in:
+## Project Structure
+The main python scripts are located in the `project` directory. All other directories contain additonal data like training data for the CNN.
 
-old:
-- Find the eyes (good contrast due to LEDs)
-- Find the head and its dimensions
-- Calculate robot distance based on head height
-- Calculate angle from robot distance and eye distance (should give 1/2 options)
-- Select correct angle based on ears
+## Usage
+```bash
+project/debug_GUI.py {rt,img,dir} location
+```
 
-new:
-- Find the head and its approximate dimensions using Tensorflow
-- Find Ellipses, devide them into possible ears and eyes
-- Calculate robot distance based on ear height
-- Calculate head angle based on ear width, position of eyes relative to the ear and if we see eyes at all
+The first argument determines the type of image provider:
+
+- `rt` takes realtime images from the robot at the IP in `location`
+- `img` uses a single image stored at `location`
+- `dir` uses all images in the directory at `location`
+
+## Report
+A description of the algorithm can be found in [Nao_EMOM.pdf](Nao_EMOM.pdf).
